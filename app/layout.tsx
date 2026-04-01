@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Document question answering",
+  title: "Document RAG",
   description:
-    "Upload a document and ask questions — answers via OpenAI or Google Gemini.",
+    "Index PDFs and text with embeddings, then ask questions with OpenAI or Gemini.",
 };
 
 export default function RootLayout({

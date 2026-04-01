@@ -8,3 +8,5 @@ node_modules
 legacy
 .devcontainer
 .github
+.venv
+__pycache__

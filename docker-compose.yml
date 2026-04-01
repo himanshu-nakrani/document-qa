@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+    volumes:
+      - rag_data:/app/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BACKEND_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  rag_data:

@@ -48,3 +48,6 @@ venv/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# RAG / vectors / registry
+/data/
