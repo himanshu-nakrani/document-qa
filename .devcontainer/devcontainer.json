@@ -1,24 +1,38 @@
 {
-  "name": "document-qa (Next.js)",
+  "name": "document-qa (Next.js + FastAPI)",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12"
+    }
+  },
   "customizations": {
     "codespaces": {
-      "openFiles": ["README.md", "app/page.tsx"]
+      "openFiles": ["README.md", "app/page.tsx", "backend/main.py"]
     },
     "vscode": {
       "extensions": [
         "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode"
-      ]
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python"
+      }
     }
   },
-  "updateContentCommand": "npm install",
+  "postCreateCommand": "python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt && npm install",
   "postAttachCommand": "npm run dev",
-  "forwardPorts": [3000],
+  "forwardPorts": [3000, 8000],
   "portsAttributes": {
     "3000": {
       "label": "Next.js",
       "onAutoForward": "openPreview"
+    },
+    "8000": {
+      "label": "FastAPI",
+      "onAutoForward": "notify"
     }
   }
 }

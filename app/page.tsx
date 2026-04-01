@@ -4,34 +4,99 @@ import { useCallback, useState } from "react";
 
 type Provider = "openai" | "gemini";
 
-const DEFAULT_MODEL: Record<Provider, string> = {
+const DEFAULT_CHAT: Record<Provider, string> = {
   openai: "gpt-4o-mini",
   gemini: "gemini-2.0-flash",
 };
 
+const DEFAULT_EMBEDDING: Record<Provider, string> = {
+  openai: "text-embedding-3-small",
+  gemini: "models/text-embedding-004",
+};
+
 export default function Home() {
   const [provider, setProvider] = useState<Provider>("openai");
-  const [model, setModel] = useState(DEFAULT_MODEL.openai);
+  const [model, setModel] = useState(DEFAULT_CHAT.openai);
+  const [embeddingModel, setEmbeddingModel] = useState(
+    DEFAULT_EMBEDDING.openai,
+  );
   const [apiKey, setApiKey] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [chunkCount, setChunkCount] = useState<number | null>(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
+  const [indexing, setIndexing] = useState(false);
 
-  const canAsk = Boolean(
-    apiKey.trim() && model.trim() && file && question.trim() && !streaming,
-  );
+  const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
+  const ingestUrl = apiBase ? `${apiBase}/api/ingest` : "/api/ingest";
+  const chatUrl = apiBase ? `${apiBase}/api/chat` : "/api/chat";
 
   const onProviderChange = (next: Provider) => {
     setProvider(next);
-    setModel(DEFAULT_MODEL[next]);
+    setModel(DEFAULT_CHAT[next]);
+    setEmbeddingModel(DEFAULT_EMBEDDING[next]);
+    setDocumentId(null);
+    setChunkCount(null);
+    setAnswer("");
   };
 
-  const onSubmit = useCallback(
+  const onIndex = useCallback(async () => {
+    if (!file || !apiKey.trim() || !embeddingModel.trim()) return;
+    setError(null);
+    setIndexing(true);
+    setDocumentId(null);
+    setChunkCount(null);
+    setAnswer("");
+
+    const formData = new FormData();
+    formData.append("provider", provider);
+    formData.append("embedding_model", embeddingModel.trim());
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(ingestUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+        body: formData,
+      });
+
+      const data = (await res.json()) as {
+        error?: string;
+        document_id?: string;
+        chunks?: number;
+      };
+
+      if (!res.ok) {
+        setError(data.error ?? `Indexing failed (${res.status})`);
+        return;
+      }
+
+      if (data.document_id) {
+        setDocumentId(data.document_id);
+        setChunkCount(typeof data.chunks === "number" ? data.chunks : null);
+      }
+    } catch {
+      setError("Network error while indexing.");
+    } finally {
+      setIndexing(false);
+    }
+  }, [apiKey, embeddingModel, file, ingestUrl, provider]);
+
+  const onAsk = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!file || !apiKey.trim() || !model.trim() || !question.trim()) return;
+      if (
+        !documentId ||
+        !apiKey.trim() ||
+        !model.trim() ||
+        !question.trim()
+      )
+        return;
 
       setError(null);
       setAnswer("");
@@ -40,11 +105,11 @@ export default function Home() {
       const formData = new FormData();
       formData.append("provider", provider);
       formData.append("model", model.trim());
-      formData.append("file", file);
+      formData.append("document_id", documentId);
       formData.append("question", question.trim());
 
       try {
-        const res = await fetch("/api/chat", {
+        const res = await fetch(chatUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${apiKey.trim()}`,
@@ -56,8 +121,8 @@ export default function Home() {
           let message = `Request failed (${res.status})`;
           const ct = res.headers.get("content-type") ?? "";
           if (ct.includes("application/json")) {
-            const data = (await res.json()) as { error?: string };
-            if (data.error) message = data.error;
+            const errBody = (await res.json()) as { error?: string };
+            if (errBody.error) message = errBody.error;
           }
           setError(message);
           return;
@@ -84,7 +149,18 @@ export default function Home() {
         setStreaming(false);
       }
     },
-    [apiKey, file, model, provider, question],
+    [apiKey, chatUrl, documentId, model, provider, question],
+  );
+
+  const canIndex = Boolean(
+    apiKey.trim() && embeddingModel.trim() && file && !indexing,
+  );
+  const canAsk = Boolean(
+    documentId &&
+      apiKey.trim() &&
+      model.trim() &&
+      question.trim() &&
+      !streaming,
   );
 
   return (
@@ -92,60 +168,50 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12 sm:px-6">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Document question answering
+            Document RAG
           </h1>
           <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Upload a document and ask a question — the model answers using the
-            file content.             Choose{" "}
+            End-to-end RAG: index a PDF or text file into a local vector index on
+            the server, then ask questions. Retrieval uses embeddings from{" "}
             <span className="font-medium text-zinc-800 dark:text-zinc-200">
               OpenAI
             </span>{" "}
             or{" "}
             <span className="font-medium text-zinc-800 dark:text-zinc-200">
-              Google Gemini
+              Gemini
             </span>
-            , then
-            paste an API key and model id. Keys are sent to this app&apos;s
-            server only to call the provider (not stored). Avoid shared machines
-            for production keys. Get keys from{" "}
-            <a
-              className="font-medium text-zinc-900 underline underline-offset-2 dark:text-zinc-100"
-              href="https://platform.openai.com/account/api-keys"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              OpenAI
-            </a>{" "}
-            or{" "}
-            <a
-              className="font-medium text-zinc-900 underline underline-offset-2 dark:text-zinc-100"
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Google AI Studio
-            </a>
-            .
+            ; answers are streamed from your chosen chat model. API keys go to
+            your FastAPI backend only (not stored in the browser).
           </p>
         </header>
 
-        <form onSubmit={onSubmit} className="flex flex-col gap-6">
+        <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            1. Provider and models
+          </h2>
           <label className="flex flex-col gap-2 text-sm font-medium">
             Provider
             <select
               value={provider}
-              onChange={(e) =>
-                onProviderChange(e.target.value as Provider)
-              }
+              onChange={(e) => onProviderChange(e.target.value as Provider)}
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 shadow-sm outline-none focus:border-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
             >
               <option value="openai">OpenAI</option>
               <option value="gemini">Google Gemini</option>
             </select>
           </label>
-
           <label className="flex flex-col gap-2 text-sm font-medium">
-            Model
+            Embedding model (for indexing and retrieval)
+            <input
+              type="text"
+              autoComplete="off"
+              value={embeddingModel}
+              onChange={(e) => setEmbeddingModel(e.target.value)}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
+            />
+          </label>
+          <label className="flex flex-col gap-2 text-sm font-medium">
+            Chat model (for answers)
             <input
               type="text"
               autoComplete="off"
@@ -154,14 +220,9 @@ export default function Home() {
               placeholder={
                 provider === "openai" ? "e.g. gpt-4o-mini" : "e.g. gemini-2.0-flash"
               }
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 shadow-sm outline-none ring-zinc-400 placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
             />
-            <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">
-              Use the exact model id from the provider&apos;s docs (e.g. chat
-              models for OpenAI, Gemini model names for Google).
-            </span>
           </label>
-
           <label className="flex flex-col gap-2 text-sm font-medium">
             API key
             <input
@@ -172,39 +233,62 @@ export default function Home() {
               placeholder={
                 provider === "openai" ? "sk-…" : "Google AI API key"
               }
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 shadow-sm outline-none ring-zinc-400 placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
             />
           </label>
+        </section>
 
-          {(!apiKey.trim() || !model.trim()) && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
-              Add your API key and model id to continue.
-            </p>
-          )}
-
+        <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            2. Index document
+          </h2>
           <label className="flex flex-col gap-2 text-sm font-medium">
-            Document (.txt or .md)
+            File (.pdf, .txt, .md)
             <input
               type="file"
-              accept=".txt,.md,text/plain,text/markdown"
-              disabled={!apiKey.trim() || !model.trim()}
+              accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown"
+              disabled={!apiKey.trim() || !embeddingModel.trim()}
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
                 setFile(f);
+                setDocumentId(null);
+                setChunkCount(null);
                 setAnswer("");
                 setError(null);
               }}
               className="text-sm font-normal file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-900 hover:file:bg-zinc-300 dark:file:bg-zinc-700 dark:file:text-zinc-100 dark:hover:file:bg-zinc-600"
             />
           </label>
+          <button
+            type="button"
+            disabled={!canIndex}
+            onClick={onIndex}
+            className="inline-flex items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+          >
+            {indexing ? "Indexing…" : "Index document"}
+          </button>
+          {documentId && (
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              Indexed.{" "}
+              <span className="font-mono text-zinc-800 dark:text-zinc-200">
+                {documentId}
+              </span>
+              {chunkCount != null ? ` · ${chunkCount} chunks` : null}
+            </p>
+          )}
+        </section>
 
+        <form onSubmit={onAsk} className="flex flex-col gap-6">
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            3. Ask a question
+          </h2>
           <label className="flex flex-col gap-2 text-sm font-medium">
             Question
             <textarea
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Can you give me a short summary?"
-              disabled={!file || !apiKey.trim() || !model.trim()}
+              placeholder="What are the main conclusions?"
+              disabled={!documentId || !apiKey.trim() || !model.trim()}
               rows={4}
               className="resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 font-normal text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-500"
             />
