@@ -7,30 +7,24 @@ from typing import Annotated
 
 from backend.database import execute, fetch_all, fetch_one
 from backend.models import DocumentListResponse, DocumentResponse
+from backend.routers.deps import extract_api_key
 from backend.services import vectorstore
 
 logger = logging.getLogger("ragapp")
 router = APIRouter()
 
 
-def _extract_key(authorization: str | None) -> str | None:
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    key = authorization.removeprefix("Bearer ").strip()
-    return key or None
-
-
 @router.get("/documents")
 async def list_documents(
     authorization: Annotated[str | None, Header()] = None,
 ):
-    key = _extract_key(authorization)
+    key = extract_api_key(authorization)
     if not key:
         return JSONResponse(status_code=401, content={"error": "Missing API key."})
 
     rows = await fetch_all(
         "SELECT id, filename, provider, embedding_model, chunk_count, file_size, status, error_message, created_at "
-        "FROM documents ORDER BY created_at DESC"
+        "FROM documents ORDER BY created_at DESC LIMIT 200"
     )
     docs = [DocumentResponse(**r) for r in rows]
     return DocumentListResponse(documents=docs)
@@ -41,7 +35,7 @@ async def get_document(
     document_id: str,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    key = _extract_key(authorization)
+    key = extract_api_key(authorization)
     if not key:
         return JSONResponse(status_code=401, content={"error": "Missing API key."})
 
@@ -56,7 +50,7 @@ async def delete_document(
     document_id: str,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    key = _extract_key(authorization)
+    key = extract_api_key(authorization)
     if not key:
         return JSONResponse(status_code=401, content={"error": "Missing API key."})
 
@@ -80,7 +74,7 @@ async def document_status(
     document_id: str,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    key = _extract_key(authorization)
+    key = extract_api_key(authorization)
     if not key:
         return JSONResponse(status_code=401, content={"error": "Missing API key."})
 

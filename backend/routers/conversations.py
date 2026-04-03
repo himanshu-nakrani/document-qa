@@ -13,16 +13,11 @@ from backend.models import (
     ConversationResponse,
     MessageResponse,
 )
+from backend.routers.deps import extract_api_key
 
 logger = logging.getLogger("ragapp")
 router = APIRouter()
 
-
-def _extract_key(authorization: str | None) -> str | None:
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    key = authorization.removeprefix("Bearer ").strip()
-    return key or None
 
 
 @router.get("/conversations")
@@ -30,7 +25,7 @@ async def list_conversations(
     document_id: str | None = None,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    key = _extract_key(authorization)
+    key = extract_api_key(authorization)
     if not key:
         return JSONResponse(status_code=401, content={"error": "Missing API key."})
 
@@ -38,14 +33,14 @@ async def list_conversations(
         rows = await fetch_all(
             "SELECT c.id, c.document_id, c.title, c.created_at, c.updated_at, "
             "(SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count "
-            "FROM conversations c WHERE c.document_id = ? ORDER BY c.updated_at DESC",
+            "FROM conversations c WHERE c.document_id = ? ORDER BY c.updated_at DESC LIMIT 200",
             (document_id,),
         )
     else:
         rows = await fetch_all(
             "SELECT c.id, c.document_id, c.title, c.created_at, c.updated_at, "
             "(SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) as message_count "
-            "FROM conversations c ORDER BY c.updated_at DESC"
+            "FROM conversations c ORDER BY c.updated_at DESC LIMIT 200"
         )
 
     items = [ConversationListItem(**r) for r in rows]
@@ -57,7 +52,7 @@ async def get_conversation(
     conversation_id: str,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    key = _extract_key(authorization)
+    key = extract_api_key(authorization)
     if not key:
         return JSONResponse(status_code=401, content={"error": "Missing API key."})
 
@@ -106,7 +101,7 @@ async def delete_conversation(
     conversation_id: str,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    key = _extract_key(authorization)
+    key = extract_api_key(authorization)
     if not key:
         return JSONResponse(status_code=401, content={"error": "Missing API key."})
 

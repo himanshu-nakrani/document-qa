@@ -13,6 +13,7 @@ from openai import APIError
 
 from backend.database import execute, fetch_all, fetch_one
 from backend.models import ChatRequest
+from backend.routers.deps import extract_api_key
 from backend.services.embeddings import (
     embed_query_gemini_sync,
     embed_query_openai,
@@ -29,19 +30,12 @@ logger = logging.getLogger("ragapp")
 router = APIRouter()
 
 
-def _extract_key(authorization: str | None) -> str | None:
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    key = authorization.removeprefix("Bearer ").strip()
-    return key or None
-
-
 @router.post("/chat", response_model=None)
 async def chat(
     body: ChatRequest,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    api_key = _extract_key(authorization)
+    api_key = extract_api_key(authorization)
     if not api_key:
         return JSONResponse(
             status_code=401,
@@ -178,7 +172,7 @@ async def chat(
                     finally:
                         queue.put_nowait(None)
 
-                asyncio.get_event_loop().run_in_executor(None, _gemini_producer)
+                asyncio.get_running_loop().run_in_executor(None, _gemini_producer)
 
                 while True:
                     token = await queue.get()
