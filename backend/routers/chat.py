@@ -1,10 +1,18 @@
+"""Chat endpoint with SSE streaming, conversation history, and source citations."""
+
 import asyncio
+import json
+import logging
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Form, Header
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, Header, Request
+from fastapi.responses import JSONResponse
+from sse_starlette.sse import EventSourceResponse
 from openai import APIError
 
+from backend.database import execute, fetch_all, fetch_one
+from backend.models import ChatRequest
 from backend.services.embeddings import (
     embed_query_gemini_sync,
     embed_query_openai,
@@ -14,113 +22,73 @@ from backend.services.llm import (
     create_openai_text_stream,
     gemini_text_stream,
 )
-from backend.services.registry import get_document
 from backend.services import vectorstore
 from backend.settings import settings
 
+logger = logging.getLogger("ragapp")
 router = APIRouter()
 
-MAX_MODEL_LEN = 128
 
-
-def _parse_provider(raw: str) -> str | None:
-    if raw in ("openai", "gemini"):
-        return raw
-    return None
+def _extract_key(authorization: str | None) -> str | None:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    key = authorization.removeprefix("Bearer ").strip()
+    return key or None
 
 
 @router.post("/chat", response_model=None)
 async def chat(
-    provider: Annotated[str, Form()],
-    model: Annotated[str, Form()],
-    question: Annotated[str, Form()],
-    document_id: Annotated[str, Form()],
+    body: ChatRequest,
     authorization: Annotated[str | None, Header()] = None,
 ):
-    if not authorization or not authorization.startswith("Bearer "):
+    api_key = _extract_key(authorization)
+    if not api_key:
         return JSONResponse(
             status_code=401,
-            content={
-                "error": "Missing or invalid Authorization header (use Bearer token).",
-            },
-        )
-    api_key = authorization.removeprefix("Bearer ").strip()
-    if not api_key:
-        return JSONResponse(status_code=401, content={"error": "Missing API key."})
-
-    p = _parse_provider(provider)
-    if not p:
-        return JSONResponse(
-            status_code=400,
-            content={"error": 'Invalid or missing provider (use "openai" or "gemini").'},
+            content={"error": "Missing or invalid Authorization header (use Bearer token)."},
         )
 
-    model_trim = model.strip()
-    if not model_trim:
-        return JSONResponse(status_code=400, content={"error": "Model is required."})
-    if len(model_trim) > MAX_MODEL_LEN:
-        return JSONResponse(
-            status_code=400,
-            content={"error": f"Model id is too long (max {MAX_MODEL_LEN} characters)."},
-        )
+    p = body.provider
+    model_trim = body.model.strip()
+    q = body.question.strip()
+    doc_id = body.document_id.strip()
 
-    q = question.strip()
-    if not q:
-        return JSONResponse(status_code=400, content={"error": "Question is required."})
-
-    doc_id = document_id.strip()
-    if not doc_id:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "document_id is required (index a document first)."},
-        )
-
-    meta = get_document(settings.document_registry_path, doc_id)
-    if not meta:
+    # ---- Validate document exists and is ready ----
+    doc = await fetch_one("SELECT * FROM documents WHERE id = ?", (doc_id,))
+    if not doc:
         return JSONResponse(
             status_code=404,
-            content={"error": "Unknown document_id. Ingest the document again."},
+            content={"error": "Unknown document_id. Ingest the document first."},
         )
-
-    if meta.get("provider") != p:
+    if doc["status"] != "ready":
         return JSONResponse(
             status_code=400,
-            content={
-                "error": "Provider does not match the document you indexed. Switch provider or re-index.",
-            },
+            content={"error": f"Document is not ready. Current status: {doc['status']}"},
+        )
+    if doc["provider"] != p:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Provider does not match the document you indexed. Switch provider or re-index."},
         )
 
-    emb_model = str(meta.get("embedding_model") or "")
+    emb_model = doc.get("embedding_model", "")
     if not emb_model:
-        return JSONResponse(status_code=500, content={"error": "Corrupt document registry entry."})
+        return JSONResponse(status_code=500, content={"error": "Corrupt document record."})
 
+    # ---- Embed query ----
     try:
         if p == "openai":
             q_emb = await embed_query_openai(api_key, emb_model, q)
         else:
-            q_emb = await asyncio.to_thread(
-                embed_query_gemini_sync,
-                api_key,
-                emb_model,
-                q,
-            )
-    except Exception as e:  # noqa: BLE001
-        return JSONResponse(
-            status_code=502,
-            content={"error": f"Query embedding failed: {e!s}"},
-        )
+            q_emb = await asyncio.to_thread(embed_query_gemini_sync, api_key, emb_model, q)
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": f"Query embedding failed: {e!s}"})
 
+    # ---- Retrieve chunks ----
     try:
-        contexts = vectorstore.query_similar(
-            doc_id,
-            q_emb,
-            top_k=settings.rag_top_k,
-        )
-    except Exception as e:  # noqa: BLE001
-        return JSONResponse(
-            status_code=404,
-            content={"error": f"Could not load vector index: {e!s}"},
-        )
+        contexts = vectorstore.query_similar(doc_id, q_emb, top_k=settings.rag_top_k)
+    except Exception as e:
+        return JSONResponse(status_code=404, content={"error": f"Could not load vector index: {e!s}"})
 
     if not contexts:
         return JSONResponse(
@@ -128,25 +96,111 @@ async def chat(
             content={"error": "No matching context found. Try re-indexing the document."},
         )
 
-    prompt = build_rag_prompt(contexts, q)
-
-    if p == "openai":
-        try:
-            stream = await create_openai_text_stream(api_key, model_trim, prompt)
-        except APIError as e:
-            sc = getattr(e, "status_code", None)
-            status = sc if sc is not None and 400 <= sc < 600 else 502
-            msg = str(e) or "OpenAI request failed."
-            return JSONResponse(status_code=status, content={"error": msg})
-        return StreamingResponse(
-            stream,
-            media_type="text/plain; charset=utf-8",
-            headers={"Cache-Control": "no-store"},
+    # ---- Resolve or create conversation ----
+    conversation_id = body.conversation_id
+    if conversation_id:
+        conv = await fetch_one("SELECT id FROM conversations WHERE id = ?", (conversation_id,))
+        if not conv:
+            return JSONResponse(status_code=404, content={"error": "Conversation not found."})
+    else:
+        conversation_id = str(uuid.uuid4())
+        title = q[:80] + ("…" if len(q) > 80 else "")
+        await execute(
+            "INSERT INTO conversations (id, document_id, title) VALUES (?, ?, ?)",
+            (conversation_id, doc_id, title),
         )
 
-    sync_gen = gemini_text_stream(api_key, model_trim, prompt)
-    return StreamingResponse(
-        sync_gen,
-        media_type="text/plain; charset=utf-8",
-        headers={"Cache-Control": "no-store"},
+    # ---- Load conversation history for multi-turn ----
+    history_rows = await fetch_all(
+        "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
+        (conversation_id,),
     )
+    history = [{"role": r["role"], "content": r["content"]} for r in history_rows]
+    # Truncate to configured max
+    history = history[-(settings.max_conversation_history):]
+
+    # ---- Save user message ----
+    user_msg_id = str(uuid.uuid4())
+    await execute(
+        "INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, 'user', ?)",
+        (user_msg_id, conversation_id, q),
+    )
+
+    # ---- Build prompt ----
+    prompt = build_rag_prompt(contexts, q, history=history)
+
+    # ---- Stream response via SSE ----
+    assistant_msg_id = str(uuid.uuid4())
+
+    async def event_generator():
+        # First: send sources
+        yield {
+            "event": "sources",
+            "data": json.dumps({"type": "sources", "chunks": contexts}),
+        }
+
+        # Collect full answer for DB storage
+        full_answer = []
+
+        try:
+            if p == "openai":
+                try:
+                    stream = await create_openai_text_stream(api_key, model_trim, prompt)
+                except APIError as e:
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({"type": "error", "message": str(e)}),
+                    }
+                    return
+
+                async for token in stream:
+                    full_answer.append(token)
+                    yield {
+                        "event": "token",
+                        "data": json.dumps({"type": "token", "content": token}),
+                    }
+            else:
+                # Gemini sync generator — run in thread
+                def _gemini_gen():
+                    return list(gemini_text_stream(api_key, model_trim, prompt))
+
+                tokens = await asyncio.to_thread(_gemini_gen)
+                for token in tokens:
+                    full_answer.append(token)
+                    yield {
+                        "event": "token",
+                        "data": json.dumps({"type": "token", "content": token}),
+                    }
+        except Exception as e:
+            logger.exception("Stream error")
+            yield {
+                "event": "error",
+                "data": json.dumps({"type": "error", "message": str(e)}),
+            }
+            return
+
+        # Save assistant message
+        answer_text = "".join(full_answer)
+        try:
+            await execute(
+                "INSERT INTO messages (id, conversation_id, role, content, sources_json) VALUES (?, ?, 'assistant', ?, ?)",
+                (assistant_msg_id, conversation_id, answer_text, json.dumps(contexts)),
+            )
+            await execute(
+                "UPDATE conversations SET updated_at = datetime('now') WHERE id = ?",
+                (conversation_id,),
+            )
+        except Exception:
+            logger.exception("Failed to save assistant message")
+
+        # Done event
+        yield {
+            "event": "done",
+            "data": json.dumps({
+                "type": "done",
+                "conversation_id": conversation_id,
+                "message_id": assistant_msg_id,
+            }),
+        }
+
+    return EventSourceResponse(event_generator())

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -13,9 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Document RAG",
+  title: "Document RAG — AI-Powered Document Q&A",
   description:
-    "Index PDFs and text with embeddings, then ask questions with OpenAI or Gemini.",
+    "Upload PDFs, DOCX, and text files, index them with embeddings, then ask questions with AI-powered retrieval-augmented generation. Supports OpenAI and Google Gemini.",
+  keywords: ["RAG", "document QA", "AI", "embeddings", "OpenAI", "Gemini", "PDF"],
 };
 
 export default function RootLayout({
@@ -26,7 +28,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
     return [
       { source: "/api/chat", destination: `${base}/chat` },
       { source: "/api/ingest", destination: `${base}/ingest` },
+      { source: "/api/documents", destination: `${base}/documents` },
+      { source: "/api/documents/:path*", destination: `${base}/documents/:path*` },
+      { source: "/api/conversations", destination: `${base}/conversations` },
+      { source: "/api/conversations/:path*", destination: `${base}/conversations/:path*` },
+      { source: "/health", destination: `${backendUrl}/health` },
+      { source: "/ready", destination: `${backendUrl}/ready` },
     ];
   },
 };
