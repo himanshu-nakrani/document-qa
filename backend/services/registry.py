@@ -1,4 +1,8 @@
-"""Persist document metadata (provider + embedding model) for RAG chat."""
+"""Persist document metadata — now a thin compatibility layer over SQLite.
+
+The async database module (backend.database) is the primary store.
+These sync functions are kept for any legacy / migration paths.
+"""
 
 import json
 import os
