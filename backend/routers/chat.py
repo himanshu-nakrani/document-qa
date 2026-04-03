@@ -99,9 +99,17 @@ async def chat(
     # ---- Resolve or create conversation ----
     conversation_id = body.conversation_id
     if conversation_id:
-        conv = await fetch_one("SELECT id FROM conversations WHERE id = ?", (conversation_id,))
+        conv = await fetch_one(
+            "SELECT id, document_id FROM conversations WHERE id = ?",
+            (conversation_id,),
+        )
         if not conv:
             return JSONResponse(status_code=404, content={"error": "Conversation not found."})
+        if conv["document_id"] != doc_id:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Conversation does not belong to the specified document."},
+            )
     else:
         conversation_id = str(uuid.uuid4())
         title = q[:80] + ("…" if len(q) > 80 else "")
@@ -160,12 +168,22 @@ async def chat(
                         "data": json.dumps({"type": "token", "content": token}),
                     }
             else:
-                # Gemini sync generator — run in thread
-                def _gemini_gen():
-                    return list(gemini_text_stream(api_key, model_trim, prompt))
+                # Gemini sync generator — stream incrementally via a queue
+                queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-                tokens = await asyncio.to_thread(_gemini_gen)
-                for token in tokens:
+                def _gemini_producer():
+                    try:
+                        for tok in gemini_text_stream(api_key, model_trim, prompt):
+                            queue.put_nowait(tok)
+                    finally:
+                        queue.put_nowait(None)
+
+                asyncio.get_event_loop().run_in_executor(None, _gemini_producer)
+
+                while True:
+                    token = await queue.get()
+                    if token is None:
+                        break
                     full_answer.append(token)
                     yield {
                         "event": "token",

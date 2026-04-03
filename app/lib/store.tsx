@@ -156,6 +156,7 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         activeDocumentId: action.payload,
+        conversations: [],
         activeConversationId: null,
         messages: [],
       };
