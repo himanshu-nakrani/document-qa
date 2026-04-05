@@ -13,6 +13,11 @@ interface SettingsPanelProps {
 export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { state, dispatch } = useStore();
   const { settings } = state;
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   if (!open) return null;
 
@@ -83,16 +88,16 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
                   style={{
                     background:
-                      settings.provider === p.value
+                      mounted && settings.provider === p.value
                         ? "var(--accent-soft)"
                         : "var(--bg-surface)",
                     border: `1px solid ${
-                      settings.provider === p.value
+                      mounted && settings.provider === p.value
                         ? "var(--border-accent)"
                         : "var(--border)"
                     }`,
                     color:
-                      settings.provider === p.value
+                      mounted && settings.provider === p.value
                         ? "var(--accent-hover)"
                         : "var(--text-secondary)",
                   }}
@@ -121,7 +126,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <input
                 type="password"
                 autoComplete="off"
-                value={settings.apiKey}
+                value={mounted ? settings.apiKey : ""}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_SETTINGS",
@@ -129,7 +134,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   })
                 }
                 placeholder={
-                  settings.provider === "openai"
+                  !mounted
+                    ? "Loading..."
+                    : settings.provider === "openai"
                     ? "sk-..."
                     : "Google AI API key"
                 }
@@ -146,7 +153,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   (e.currentTarget.style.borderColor = "var(--border)")
                 }
               />
-              {settings.apiKey && (
+              {mounted && settings.apiKey && (
                 <CheckCircle2
                   size={14}
                   className="absolute right-3 top-1/2 -translate-y-1/2"
@@ -171,7 +178,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <input
               type="text"
               autoComplete="off"
-              value={settings.embeddingModel}
+              value={mounted ? settings.embeddingModel : ""}
               onChange={(e) =>
                 dispatch({
                   type: "SET_SETTINGS",
@@ -204,7 +211,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <input
               type="text"
               autoComplete="off"
-              value={settings.chatModel}
+              value={mounted ? settings.chatModel : ""}
               onChange={(e) =>
                 dispatch({
                   type: "SET_SETTINGS",

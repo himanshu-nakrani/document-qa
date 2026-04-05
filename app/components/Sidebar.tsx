@@ -40,6 +40,11 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
     sidebarOpen,
   } = state;
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const refreshDocuments = useCallback(async () => {
     if (!settings.apiKey) return;
@@ -175,15 +180,15 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
       <div className="px-3 py-3 flex gap-2 flex-shrink-0">
         <button
           onClick={onUploadClick}
-          disabled={!settings.apiKey}
+          disabled={!mounted || !settings.apiKey}
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all"
           style={{
             background: "var(--accent)",
             color: "#fff",
-            opacity: settings.apiKey ? 1 : 0.5,
+            opacity: mounted && settings.apiKey ? 1 : 0.5,
           }}
           onMouseEnter={(e) => {
-            if (settings.apiKey) e.currentTarget.style.background = "var(--accent-hover)";
+            if (mounted && settings.apiKey) e.currentTarget.style.background = "var(--accent-hover)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = "var(--accent)";
@@ -231,18 +236,21 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
               style={{ color: "var(--text-muted)" }}
             />
             <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-              {settings.apiKey
-                ? "No documents yet. Upload one to get started."
-                : "Enter your API key in settings to begin."}
+              {!mounted ? (
+                "Loading..."
+              ) : settings.apiKey ? (
+                "No documents yet. Upload one to get started."
+              ) : (
+                "Enter your API key in settings to begin."
+              )}
             </p>
           </div>
         )}
 
         {documents.map((doc) => (
           <div key={doc.id} className="mb-1">
-            <button
-              onClick={() => handleDocumentClick(doc)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all group"
+            <div
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all group cursor-pointer"
               style={{
                 background:
                   activeDocumentId === doc.id
@@ -261,6 +269,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                 if (activeDocumentId !== doc.id)
                   e.currentTarget.style.background = "transparent";
               }}
+              onClick={() => handleDocumentClick(doc)}
             >
               {statusIcon(doc.status)}
               <div className="flex-1 min-w-0">
@@ -282,7 +291,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
               </div>
               <button
                 onClick={(e) => handleDeleteDocument(e, doc.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all hover:bg-red-500/10"
                 style={{ color: "var(--text-tertiary)" }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "var(--error)")}
                 onMouseLeave={(e) =>
@@ -291,7 +300,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
               >
                 <Trash2 size={14} />
               </button>
-            </button>
+            </div>
 
             {/* Conversations under active document */}
             {activeDocumentId === doc.id && doc.status === "ready" && (
@@ -311,10 +320,10 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                   New conversation
                 </button>
                 {conversations.map((conv) => (
-                  <button
+                  <div
                     key={conv.id}
                     onClick={() => handleConversationClick(conv)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors group"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors group cursor-pointer"
                     style={{
                       background:
                         activeConversationId === conv.id
@@ -343,7 +352,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                     </span>
                     <button
                       onClick={(e) => handleDeleteConversation(e, conv.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all hover:bg-red-500/10"
                       style={{ color: "var(--text-tertiary)" }}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.color = "var(--error)")
@@ -354,7 +363,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                     >
                       <Trash2 size={11} />
                     </button>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}

@@ -38,6 +38,11 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const activeDoc = documents.find((d) => d.id === activeDocumentId);
   const canAsk =
@@ -317,28 +322,28 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
               <div className="flex gap-3">
                 <button
                   onClick={onUploadClick}
-                  disabled={!settings.apiKey}
+                  disabled={!mounted || !settings.apiKey}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
                   style={{
-                    background: settings.apiKey
+                    background: mounted && settings.apiKey
                       ? "var(--accent)"
                       : "var(--bg-elevated)",
-                    color: settings.apiKey ? "#fff" : "var(--text-tertiary)",
-                    cursor: settings.apiKey ? "pointer" : "not-allowed",
+                    color: mounted && settings.apiKey ? "#fff" : "var(--text-tertiary)",
+                    cursor: mounted && settings.apiKey ? "pointer" : "not-allowed",
                   }}
                   onMouseEnter={(e) => {
-                    if (settings.apiKey)
+                    if (mounted && settings.apiKey)
                       e.currentTarget.style.background = "var(--accent-hover)";
                   }}
                   onMouseLeave={(e) => {
-                    if (settings.apiKey)
+                    if (mounted && settings.apiKey)
                       e.currentTarget.style.background = "var(--accent)";
                   }}
                 >
                   <MessageSquarePlus size={16} />
                   Upload Document
                 </button>
-                {!settings.apiKey && (
+                {mounted && !settings.apiKey && (
                   <button
                     onClick={() => dispatch({ type: "SET_SETTINGS_OPEN", payload: true })}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
@@ -466,11 +471,13 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  settings.apiKey
+                  !mounted
+                    ? "Initializing..."
+                    : settings.apiKey
                     ? "Ask a question about your document…"
                     : "Set your API key in settings first"
                 }
-                disabled={!settings.apiKey || !activeDoc || streaming}
+                disabled={!mounted || !settings.apiKey || !activeDoc || streaming}
                 rows={1}
                 className="flex-1 resize-none bg-transparent px-4 py-3 text-sm outline-none"
                 style={{
