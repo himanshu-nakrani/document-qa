@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field
 from typing import Literal
+from datetime import datetime
 
 
 # ---------------------------------------------------------------------------
@@ -17,7 +18,7 @@ class DocumentResponse(BaseModel):
     file_size: int
     status: str  # processing | ready | error
     error_message: str | None = None
-    created_at: str
+    created_at: datetime
 
 
 class DocumentListResponse(BaseModel):
@@ -67,15 +68,15 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     sources: list[str] | None = None
-    created_at: str
+    created_at: datetime
 
 
 class ConversationResponse(BaseModel):
     id: str
     document_id: str
     title: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     messages: list[MessageResponse] = []
 
 
@@ -83,8 +84,8 @@ class ConversationListItem(BaseModel):
     id: str
     document_id: str
     title: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     message_count: int = 0
 
 
