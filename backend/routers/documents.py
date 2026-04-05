@@ -60,7 +60,7 @@ async def delete_document(
 
     # Delete vector file
     try:
-        vectorstore.delete_collection(document_id)
+        await vectorstore.delete_collection(document_id)
     except Exception:
         logger.warning("Failed to delete vector file for %s", document_id)
 

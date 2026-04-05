@@ -1,64 +1,88 @@
-"""NumPy-backed vector storage (one file per document). Works without ChromaDB."""
+"""Vector storage service. Supports both pgvector (Supabase) and local NumPy files."""
 
+import os
 from pathlib import Path
-
 import numpy as np
-
+import json
+import psycopg
 from backend.settings import settings
 
+# If running with Postgres, we use the 'vectors' table
+# Schema: id, document_id, content, embedding (vector)
 
-def _doc_path(document_id: str) -> Path:
-    base = Path(settings.vector_store_directory)
-    base.mkdir(parents=True, exist_ok=True)
-    safe = "".join(c for c in document_id if c.isalnum() or c in "-_")
-    if not safe:
-        raise ValueError("Invalid document id.")
-    return base / f"{safe}.npz"
+async def _get_pg_conn():
+    if not settings.database_url:
+        return None
+    return await psycopg.AsyncConnection.connect(settings.database_url, autocommit=True)
 
-
-def add_chunks(
+async def add_chunks(
     document_id: str,
     chunk_texts: list[str],
     embeddings: list[list[float]],
 ) -> None:
-    if len(chunk_texts) != len(embeddings):
-        raise ValueError("Chunks and embeddings length mismatch.")
-    if not chunk_texts:
-        raise ValueError("No chunks to index.")
-    path = _doc_path(document_id)
-    E = np.asarray(embeddings, dtype=np.float32)
-    if E.ndim != 2:
-        raise ValueError("Embeddings must be a 2D array.")
-    texts = np.asarray(chunk_texts, dtype=object)
-    np.savez_compressed(path, embeddings=E, texts=texts)
+    if settings.database_url:
+        # PostgreSQL with pgvector
+        async with await _get_pg_conn() as conn:
+            async with conn.cursor() as cur:
+                # Batch insert
+                for text, emb in zip(chunk_texts, embeddings):
+                    await cur.execute(
+                        "INSERT INTO vectors (document_id, content, embedding) VALUES (%s, %s, %s)",
+                        (document_id, text, emb)
+                    )
+    else:
+        # NumPy Local Storage
+        base = Path(settings.vector_store_directory)
+        base.mkdir(parents=True, exist_ok=True)
+        path = base / f"{document_id}.npz"
+        E = np.asarray(embeddings, dtype=np.float32)
+        texts = np.asarray(chunk_texts, dtype=object)
+        np.savez_compressed(path, embeddings=E, texts=texts)
 
-
-def query_similar(
+async def query_similar(
     document_id: str,
     query_embedding: list[float],
     top_k: int,
 ) -> list[str]:
-    path = _doc_path(document_id)
-    if not path.is_file():
-        raise FileNotFoundError("Vector index file not found.")
-    data = np.load(path, allow_pickle=True)
-    E = data["embeddings"]
-    texts = data["texts"]
-    n = E.shape[0]
-    if n == 0:
-        return []
-    q = np.asarray(query_embedding, dtype=np.float32)
-    qn = q / (np.linalg.norm(q) + 1e-9)
-    En = E / (np.linalg.norm(E, axis=1, keepdims=True) + 1e-9)
-    sims = En @ qn
-    k = min(top_k, n)
-    idx = np.argsort(-sims)[:k]
-    return [str(texts[i]) for i in idx]
+    if settings.database_url:
+        # PostgreSQL with pgvector (Cosine Similarity)
+        async with await _get_pg_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    SELECT content 
+                    FROM vectors 
+                    WHERE document_id = %s 
+                    ORDER BY embedding <=> %s::vector 
+                    LIMIT %s
+                    """,
+                    (document_id, query_embedding, top_k)
+                )
+                rows = await cur.fetchall()
+                return [r[0] for r in rows]
+    else:
+        # NumPy Local Storage
+        path = Path(settings.vector_store_directory) / f"{document_id}.npz"
+        if not path.is_file():
+            return []
+        data = np.load(path, allow_pickle=True)
+        E = data["embeddings"]
+        texts = data["texts"]
+        q = np.asarray(query_embedding, dtype=np.float32)
+        qn = q / (np.linalg.norm(q) + 1e-9)
+        En = E / (np.linalg.norm(E, axis=1, keepdims=True) + 1e-9)
+        sims = En @ qn
+        idx = np.argsort(-sims)[:top_k]
+        return [str(texts[i]) for i in idx]
 
-
-def delete_collection(document_id: str) -> None:
-    path = _doc_path(document_id)
-    try:
-        path.unlink()
-    except OSError:
-        pass
+async def delete_collection(document_id: str) -> None:
+    if settings.database_url:
+        async with await _get_pg_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("DELETE FROM vectors WHERE document_id = %s", (document_id,))
+    else:
+        path = Path(settings.vector_store_directory) / f"{document_id}.npz"
+        try:
+            path.unlink()
+        except OSError:
+            pass

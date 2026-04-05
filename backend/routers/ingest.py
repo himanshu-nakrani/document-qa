@@ -75,7 +75,7 @@ async def _process_document(
             )
 
         # Store vectors
-        vectorstore.add_chunks(document_id, chunks, embeddings)
+        await vectorstore.add_chunks(document_id, chunks, embeddings)
 
         # Mark ready
         await execute(
