@@ -169,6 +169,8 @@ async def chat(
                     try:
                         for tok in gemini_text_stream(api_key, model_trim, prompt):
                             queue.put_nowait(tok)
+                    except Exception as e:
+                        queue.put_nowait(e)
                     finally:
                         queue.put_nowait(None)
 
@@ -178,6 +180,9 @@ async def chat(
                     token = await queue.get()
                     if token is None:
                         break
+                    if isinstance(token, Exception):
+                        raise token
+                    
                     full_answer.append(token)
                     yield {
                         "event": "token",

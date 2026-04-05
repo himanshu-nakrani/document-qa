@@ -51,7 +51,7 @@ class Settings(BaseSettings):
         alias="DEFAULT_EMBEDDING_MODEL_OPENAI",
     )
     default_embedding_model_gemini: str = Field(
-        default="models/text-embedding-004",
+        default="models/gemini-embedding-001",
         alias="DEFAULT_EMBEDDING_MODEL_GEMINI",
     )
 

@@ -40,7 +40,7 @@ const DEFAULT_CHAT: Record<Provider, string> = {
 
 const DEFAULT_EMBEDDING: Record<Provider, string> = {
   openai: "text-embedding-3-small",
-  gemini: "models/text-embedding-004",
+  gemini: "models/gemini-embedding-001",
 };
 
 function loadSettings(): AppSettings {
@@ -57,10 +57,15 @@ function loadSettings(): AppSettings {
     if (raw) {
       const parsed = JSON.parse(raw);
       const prov: Provider = parsed.provider === "gemini" ? "gemini" : "openai";
+      let embeddingModel = parsed.embeddingModel ?? DEFAULT_EMBEDDING[prov];
+      // Migration for deprecated models
+      if (embeddingModel === "models/text-embedding-004") {
+        embeddingModel = DEFAULT_EMBEDDING[prov];
+      }
       return {
         provider: prov,
         chatModel: parsed.chatModel ?? DEFAULT_CHAT[prov],
-        embeddingModel: parsed.embeddingModel ?? DEFAULT_EMBEDDING[prov],
+        embeddingModel,
         apiKey: parsed.apiKey ?? "",
       };
     }
