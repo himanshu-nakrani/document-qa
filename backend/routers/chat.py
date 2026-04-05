@@ -80,7 +80,7 @@ async def chat(
 
     # ---- Retrieve chunks ----
     try:
-        contexts = vectorstore.query_similar(doc_id, q_emb, top_k=settings.rag_top_k)
+        contexts = await vectorstore.query_similar(doc_id, q_emb, top_k=settings.rag_top_k)
     except Exception as e:
         return JSONResponse(status_code=404, content={"error": f"Could not load vector index: {e!s}"})
 

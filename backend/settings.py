@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     rag_top_k: int = Field(default=5, alias="RAG_TOP_K")
 
     # --- Storage ---
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")
     vector_store_directory: str = Field(
         default="data/vectors",
         alias="VECTOR_STORE_DIRECTORY",
