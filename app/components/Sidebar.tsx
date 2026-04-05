@@ -159,7 +159,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
               background: "var(--accent-soft)",
             }}
           >
-            <FileText size={16} style={{ color: "var(--accent)" }} />
+            <FileText size={16} style={{ color: "var(--text-primary)" }} />
           </div>
           <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
             Document RAG
@@ -184,7 +184,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
           className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all"
           style={{
             background: "var(--accent)",
-            color: "#fff",
+            color: "var(--accent-fg)",
             opacity: mounted && settings.apiKey ? 1 : 0.5,
           }}
           onMouseEnter={(e) => {
@@ -278,7 +278,7 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                   style={{
                     color:
                       activeDocumentId === doc.id
-                        ? "var(--accent-hover)"
+                        ? "var(--text-primary)"
                         : "var(--text-primary)",
                   }}
                 >
@@ -308,9 +308,9 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                 <button
                   onClick={handleNewConversation}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs font-medium transition-colors mb-1"
-                  style={{ color: "var(--accent)" }}
+                  style={{ color: "var(--text-primary)" }}
                   onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "var(--accent-soft)")
+                    (e.currentTarget.style.background = "var(--bg-surface-hover)")
                   }
                   onMouseLeave={(e) =>
                     (e.currentTarget.style.background = "transparent")

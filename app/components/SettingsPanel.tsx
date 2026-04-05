@@ -98,7 +98,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     }`,
                     color:
                       mounted && settings.provider === p.value
-                        ? "var(--accent-hover)"
+                        ? "var(--text-primary)"
                         : "var(--text-secondary)",
                   }}
                 >
@@ -242,7 +242,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           <button
             onClick={onClose}
             className="px-5 py-2 rounded-lg text-sm font-medium transition-all"
-            style={{ background: "var(--accent)", color: "#fff" }}
+            style={{ background: "var(--accent)", color: "var(--accent-fg)" }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.background = "var(--accent-hover)")
             }

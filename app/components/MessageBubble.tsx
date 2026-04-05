@@ -47,7 +47,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           maxWidth: isUser ? "75%" : "85%",
           background: isUser ? "var(--accent)" : "var(--bg-surface)",
           border: isUser ? "none" : "1px solid var(--border)",
-          color: isUser ? "#fff" : "var(--text-primary)",
+          color: isUser ? "var(--accent-fg)" : "var(--text-primary)",
           borderTopRightRadius: isUser ? "4px" : undefined,
           borderTopLeftRadius: !isUser ? "4px" : undefined,
         }}

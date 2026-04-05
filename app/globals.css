@@ -7,52 +7,56 @@
 
 :root {
   /* --- Color palette (dark-first) --- */
-  --bg-primary: #0b0f1a;
-  --bg-secondary: #111827;
-  --bg-tertiary: #1a2236;
-  --bg-surface: #1e293b;
-  --bg-surface-hover: #243047;
-  --bg-elevated: #253352;
+  --bg-primary: #09090b;
+  --bg-secondary: #0e0e11;
+  --bg-tertiary: #18181b;
+  --bg-surface: #18181b;
+  --bg-surface-hover: #27272a;
+  --bg-elevated: #27272a;
 
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-muted: #475569;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-muted: #52525b;
 
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-soft: rgba(99, 102, 241, 0.15);
-  --accent-glow: rgba(99, 102, 241, 0.3);
+  --accent: #fafafa; /* Pure monochromatic white buttons */
+  --accent-fg: #09090b; /* Text color inside accent buttons */
+  --accent-hover: #e4e4e7;
+  --accent-soft: rgba(250, 250, 250, 0.05); /* Slight white highlight */
+  --accent-glow: rgba(250, 250, 250, 0.15);
+  
+  --accent-brand: #3b82f6; /* Used for secondary highlights / active bubbles */
+  --accent-brand-hover: #60a5fa;
 
   --success: #10b981;
-  --success-soft: rgba(16, 185, 129, 0.15);
+  --success-soft: rgba(16, 185, 129, 0.1);
   --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.15);
+  --warning-soft: rgba(245, 158, 11, 0.1);
   --error: #ef4444;
-  --error-soft: rgba(239, 68, 68, 0.12);
+  --error-soft: rgba(239, 68, 68, 0.1);
 
-  --border: rgba(148, 163, 184, 0.1);
-  --border-hover: rgba(148, 163, 184, 0.2);
-  --border-accent: rgba(99, 102, 241, 0.4);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-accent: rgba(255, 255, 255, 0.25);
 
   /* --- Spacing & sizing --- */
-  --sidebar-width: 320px;
-  --header-height: 56px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  --sidebar-width: 280px; /* Slimmer, more elegant sidebar */
+  --header-height: 52px;
+  --radius-sm: 6px;
+  --radius-md: 8px; /* Sharper curve instead of very round */
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
   /* --- Shadows --- */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px var(--accent-glow);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 12px var(--accent-glow);
 
   /* --- Glass --- */
-  --glass-bg: rgba(17, 24, 39, 0.7);
-  --glass-border: rgba(148, 163, 184, 0.08);
-  --glass-blur: 16px;
+  --glass-bg: rgba(9, 9, 11, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-blur: 20px;
 }
 
 @theme inline {
@@ -61,6 +65,7 @@
   --font-sans: 'Inter', var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), 'SF Mono', monospace;
 }
+
 
 /* ===================================================================
    Base

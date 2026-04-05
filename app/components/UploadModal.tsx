@@ -175,7 +175,7 @@ export default function UploadModal({ open, onClose }: UploadModalProps) {
 
             {file ? (
               <div className="flex flex-col items-center gap-2">
-                <FileText size={36} style={{ color: "var(--accent)" }} />
+                <FileText size={36} style={{ color: "var(--text-primary)" }} />
                 <p
                   className="text-sm font-medium"
                   style={{ color: "var(--text-primary)" }}
@@ -297,7 +297,7 @@ export default function UploadModal({ open, onClose }: UploadModalProps) {
               color:
                 !file || uploading || status === "done"
                   ? "var(--text-tertiary)"
-                  : "#fff",
+                  : "var(--accent-fg)",
               cursor:
                 !file || uploading || status === "done"
                   ? "not-allowed"

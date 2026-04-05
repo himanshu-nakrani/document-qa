@@ -240,11 +240,12 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                   width: 64,
                   height: 64,
                   background:
-                    "linear-gradient(135deg, var(--accent-soft), var(--bg-surface))",
-                  border: "1px solid var(--border-accent)",
+                    "linear-gradient(135deg, var(--bg-surface), var(--bg-tertiary))",
+                  border: "1px solid var(--border)",
+                  boxShadow: "var(--shadow-glow)",
                 }}
               >
-                <Sparkles size={28} style={{ color: "var(--accent)" }} />
+                <Sparkles size={28} style={{ color: "var(--text-primary)" }} />
               </div>
               <h3
                 className="text-lg font-semibold mb-1"
@@ -299,11 +300,12 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                   width: 72,
                   height: 72,
                   background:
-                    "linear-gradient(135deg, var(--bg-surface), var(--bg-tertiary))",
+                    "linear-gradient(135deg, var(--bg-secondary), var(--bg-primary))",
                   border: "1px solid var(--border)",
+                  boxShadow: "var(--shadow-glow)",
                 }}
               >
-                <FileText size={32} style={{ color: "var(--text-muted)" }} />
+                <FileText size={32} style={{ color: "var(--text-secondary)" }} />
               </div>
               <h3
                 className="text-lg font-semibold mb-2"
@@ -328,7 +330,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                     background: mounted && settings.apiKey
                       ? "var(--accent)"
                       : "var(--bg-elevated)",
-                    color: mounted && settings.apiKey ? "#fff" : "var(--text-tertiary)",
+                    color: mounted && settings.apiKey ? "var(--accent-fg)" : "var(--text-tertiary)",
                     cursor: mounted && settings.apiKey ? "pointer" : "not-allowed",
                   }}
                   onMouseEnter={(e) => {
@@ -442,11 +444,13 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
             className="max-w-3xl mx-auto relative"
           >
             <div
-              className="flex items-end rounded-xl transition-all"
+              className="flex items-end rounded-2xl transition-all"
               style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border)",
-                boxShadow: "var(--shadow-md)",
+                background: "var(--glass-bg)",
+                backdropFilter: "blur(var(--glass-blur))",
+                WebkitBackdropFilter: "blur(var(--glass-blur))",
+                border: "1px solid var(--glass-border)",
+                boxShadow: "var(--shadow-lg)",
               }}
               onFocus={(e) => {
                 (
@@ -492,7 +496,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                 className="flex items-center justify-center p-2 m-1.5 rounded-lg transition-all"
                 style={{
                   background: canAsk ? "var(--accent)" : "transparent",
-                  color: canAsk ? "#fff" : "var(--text-muted)",
+                  color: canAsk ? "var(--accent-fg)" : "var(--text-muted)",
                   cursor: canAsk ? "pointer" : "default",
                 }}
                 onMouseEnter={(e) => {
