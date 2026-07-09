@@ -291,39 +291,47 @@ async def _tool_compare_documents(ctx: AgentToolContext, args: dict[str, Any]) -
     aggregated_chunks: list[RetrievedChunk] = []
     seen_ids = {c.chunk_id for c in ctx.collected_chunks}
 
-    tasks = [
-        retrieve(
-            RetrievalRequest(
-                query=query,
-                document_ids=[doc_id],
-                owner_id=ctx.owner_id,
-                query_embedding=embedding,
-                top_k=top_k,
-                min_score=ctx.min_score,
-                workspace_id=ctx.workspace_id,
-            ),
+    # ⚡ BOLT OPTIMIZATION:
+    # Instead of running `retrieve()` in a loop (which repeats the entire
+    # pipeline including RRF, graph traversal, and cross-encoder for each doc),
+    # issue a single batched retrieval. The underlying DB handles document_ids
+    # via an `IN (...)` clause, massively reducing CPU and network latency.
+    global_top_k = max(15, top_k * len(doc_ids) * 3)
+    batched_result = await retrieve(
+        RetrievalRequest(
+            query=query,
+            document_ids=doc_ids,
+            owner_id=ctx.owner_id,
+            query_embedding=embedding,
+            top_k=global_top_k,
+            min_score=ctx.min_score,
+            workspace_id=ctx.workspace_id,
         )
-        for doc_id in doc_ids
-    ]
-    results = await asyncio.gather(*tasks)
+    )
 
-    for doc_id, result in zip(doc_ids, results):
-        for chunk in result.chunks:
+    chunks_by_doc: dict[str, list[RetrievedChunk]] = {doc_id: [] for doc_id in doc_ids}
+    for chunk in batched_result.chunks:
+        if chunk.document_id in chunks_by_doc and len(chunks_by_doc[chunk.document_id]) < top_k:
+            chunks_by_doc[chunk.document_id].append(chunk)
+
+    for doc_id in doc_ids:
+        doc_chunks = chunks_by_doc.get(doc_id) or []
+        for chunk in doc_chunks:
             if chunk.chunk_id in seen_ids:
                 continue
             seen_ids.add(chunk.chunk_id)
             aggregated_chunks.append(chunk)
 
-        best_score = max((c.score for c in result.chunks), default=0.0)
+        best_score = max((c.score for c in doc_chunks), default=0.0)
         per_doc_payload.append(
             {
                 "document_id": doc_id,
                 "best_score": round(best_score, 4),
-                "hit_count": len(result.chunks),
+                "hit_count": len(doc_chunks),
                 "top_excerpt": (
-                    (result.chunks[0].excerpt[:400] + "…")
-                    if result.chunks and len(result.chunks[0].excerpt) > 400
-                    else (result.chunks[0].excerpt if result.chunks else "")
+                    (doc_chunks[0].excerpt[:400] + "…")
+                    if doc_chunks and len(doc_chunks[0].excerpt) > 400
+                    else (doc_chunks[0].excerpt if doc_chunks else "")
                 ),
             }
         )
