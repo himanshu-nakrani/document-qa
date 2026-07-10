@@ -52,3 +52,7 @@
 ## 2024-05-30 - Memoize expensive operations on referentially stable objects with WeakMap
 **Learning:** During SSE streaming, components like `TrustAnalyticsPanel` recalculate metrics for all messages. Since earlier messages are referentially stable, parsing them on every render cycle causes O(N) CPU overhead, leading to UI jitter.
 **Action:** When mapping over items that maintain referential equality across state updates, use a `WeakMap` to cache expensive derivations (like regex matching or string splitting). This avoids memory leaks while making subsequent calculations O(1).
+
+## 2026-05-15 - Batch multi-document retrieval via a single query
+**Learning:** Calling `retrieve()` in a loop inside `_tool_compare_documents` via `asyncio.gather(*tasks)` forces the full retrieval pipeline (including DB searches, RRF fusion, graph traversal, and reranking) to execute N times. This creates a significant N+1 pipeline bottleneck for multi-document operations. The underlying `retrieve` natively supports multiple `document_ids`, allowing DB-level batching.
+**Action:** When querying multiple documents to gather a limited number of chunks per document, use a single `retrieve` call with all `document_ids` and an inflated `top_k`, then group and limit the results in Python. This leverages DB aggregation and executes the heavy pipeline components (like the reranker) only once.

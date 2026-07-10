@@ -168,9 +168,12 @@ async def test_compare_documents_aggregates_per_doc(monkeypatch):
             self.stages = {}
 
     async def fake_retrieve(req, **_kw):
-        # Each call sees one doc in req.document_ids; return chunks tied to it.
-        doc_id = req.document_ids[0]
-        return FakeResult([_chunk(f"{doc_id}-1", doc=doc_id, score=0.9 if doc_id == "doc-a" else 0.5)])
+        # The new batched implementation sends all doc_ids at once.
+        # Return one chunk for each document ID requested.
+        chunks = []
+        for doc_id in req.document_ids:
+            chunks.append(_chunk(f"{doc_id}-1", doc=doc_id, score=0.9 if doc_id == "doc-a" else 0.5))
+        return FakeResult(chunks)
 
     monkeypatch.setattr(agent_tools, "embed_query", fake_embed)
     monkeypatch.setattr(agent_tools, "retrieve", fake_retrieve)
