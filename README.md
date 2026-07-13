@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/sourceful-banner.svg" alt="Sourceful — Ask your documents. Get answers with sources." width="100%" />
+</p>
+
 # Sourceful — Document Question-Answering Platform
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
