@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/sourceful-header.svg" alt="Sourceful — Documents flow into retrieval, producing grounded cited answers" width="100%" />
+  <img src="docs/assets/sourceful-banner.svg" alt="Sourceful — Ask your documents. Get answers with sources." width="100%" />
 </p>
 
 # Sourceful — Document Question-Answering Platform
