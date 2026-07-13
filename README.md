@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/sourceful-header.svg" alt="Sourceful — Documents flow into retrieval, producing grounded cited answers" width="100%" />
+</p>
+
 # Sourceful — Document Question-Answering Platform
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)

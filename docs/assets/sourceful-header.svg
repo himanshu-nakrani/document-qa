@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
+  <title id="title">Sourceful — Document Question-Answering Platform</title>
+  <desc id="desc">Banner illustrating documents flowing into a retrieval graph that produces cited answers</desc>
+  <defs>
+    <!-- Background -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0e0c0a"/>
+      <stop offset="45%" stop-color="#141210"/>
+      <stop offset="100%" stop-color="#1a1410"/>
+    </linearGradient>
+    <radialGradient id="glowL" cx="18%" cy="55%" r="42%">
+      <stop offset="0%" stop-color="#d9775e" stop-opacity="0.22"/>
+      <stop offset="55%" stop-color="#d9775e" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#d9775e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowC" cx="50%" cy="42%" r="38%">
+      <stop offset="0%" stop-color="#e8925d" stop-opacity="0.16"/>
+      <stop offset="60%" stop-color="#e8925d" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#e8925d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowR" cx="82%" cy="50%" r="36%">
+      <stop offset="0%" stop-color="#6baa7a" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#6baa7a" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Accents -->
+    <linearGradient id="terra" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d9775e"/>
+      <stop offset="100%" stop-color="#e89870"/>
+    </linearGradient>
+    <linearGradient id="sunset" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#d35d47"/>
+      <stop offset="100%" stop-color="#e8925d"/>
+    </linearGradient>
+    <linearGradient id="sage" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4a7c59"/>
+      <stop offset="100%" stop-color="#6baa7a"/>
+    </linearGradient>
+    <linearGradient id="cream" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f5f0e8"/>
+      <stop offset="100%" stop-color="#ede8e0"/>
+    </linearGradient>
+    <linearGradient id="docFace" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a2621"/>
+      <stop offset="100%" stop-color="#1a1814"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#d9775e" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#d9775e" stop-opacity="0.7"/>
+      <stop offset="55%" stop-color="#e8925d" stop-opacity="0.85"/>
+      <stop offset="80%" stop-color="#6baa7a" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#6baa7a" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="cardEdge" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ede8e0" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ede8e0" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="answerCard" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a2621"/>
+      <stop offset="100%" stop-color="#1e1b17"/>
+    </linearGradient>
+
+    <!-- Soft glow filter -->
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="nodeGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="textGlow" x="-20%" y="-40%" width="140%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Clip for rounded banner -->
+    <clipPath id="frame">
+      <rect width="1280" height="420" rx="24" ry="24"/>
+    </clipPath>
+
+    <!-- Subtle grid pattern -->
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ede8e0" stroke-opacity="0.03" stroke-width="1"/>
+    </pattern>
+
+    <!-- Dot constellation -->
+    <pattern id="dots" width="48" height="48" patternUnits="userSpaceOnUse">
+      <circle cx="4" cy="8" r="0.8" fill="#ede8e0" fill-opacity="0.06"/>
+      <circle cx="28" cy="30" r="0.6" fill="#d9775e" fill-opacity="0.08"/>
+    </pattern>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <!-- Base -->
+    <rect width="1280" height="420" fill="url(#bg)"/>
+    <rect width="1280" height="420" fill="url(#grid)"/>
+    <rect width="1280" height="420" fill="url(#dots)"/>
+    <rect width="1280" height="420" fill="url(#glowL)"/>
+    <rect width="1280" height="420" fill="url(#glowC)"/>
+    <rect width="1280" height="420" fill="url(#glowR)"/>
+
+    <!-- Top hairline accent -->
+    <rect x="0" y="0" width="1280" height="2" fill="url(#terra)" opacity="0.55"/>
+
+    <!-- ========== LEFT: Source documents stack ========== -->
+    <g transform="translate(72, 78)">
+      <!-- Back doc -->
+      <g transform="translate(18, 18) rotate(-8 70 95)">
+        <rect x="0" y="0" width="140" height="190" rx="12" fill="#1a1814" stroke="url(#cardEdge)" stroke-width="1.5"/>
+        <rect x="18" y="28" width="90" height="6" rx="3" fill="#ede8e0" fill-opacity="0.12"/>
+        <rect x="18" y="46" width="72" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.08"/>
+        <rect x="18" y="62" width="84" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.07"/>
+        <rect x="18" y="78" width="60" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.06"/>
+      </g>
+      <!-- Mid doc -->
+      <g transform="translate(8, 8) rotate(-3 70 95)">
+        <rect x="0" y="0" width="140" height="190" rx="12" fill="#221e1a" stroke="url(#cardEdge)" stroke-width="1.5"/>
+        <rect x="18" y="28" width="96" height="6" rx="3" fill="#d9775e" fill-opacity="0.35"/>
+        <rect x="18" y="46" width="78" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.1"/>
+        <rect x="18" y="62" width="88" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.08"/>
+        <rect x="18" y="78" width="54" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.07"/>
+        <rect x="18" y="104" width="100" height="48" rx="8" fill="#d9775e" fill-opacity="0.08" stroke="#d9775e" stroke-opacity="0.2"/>
+      </g>
+      <!-- Front doc (featured) -->
+      <g filter="url(#softGlow)">
+        <rect x="0" y="0" width="140" height="190" rx="12" fill="url(#docFace)" stroke="#d9775e" stroke-opacity="0.45" stroke-width="1.5"/>
+        <!-- Fold corner -->
+        <path d="M108 0 H128 A12 12 0 0 1 140 12 V32 L108 0Z" fill="#d9775e" fill-opacity="0.35"/>
+        <path d="M108 0 L140 32" stroke="#e89870" stroke-opacity="0.5" stroke-width="1"/>
+        <!-- Title lines -->
+        <rect x="18" y="30" width="88" height="7" rx="3.5" fill="url(#terra)"/>
+        <rect x="18" y="50" width="104" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.14"/>
+        <rect x="18" y="66" width="92" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.1"/>
+        <rect x="18" y="82" width="98" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.09"/>
+        <rect x="18" y="98" width="70" height="5" rx="2.5" fill="#ede8e0" fill-opacity="0.07"/>
+        <!-- Highlighted passage (retrieved chunk) -->
+        <rect x="14" y="122" width="112" height="44" rx="8" fill="#d9775e" fill-opacity="0.12" stroke="#d9775e" stroke-opacity="0.4" stroke-width="1"/>
+        <rect x="24" y="134" width="72" height="4" rx="2" fill="#e89870" fill-opacity="0.7"/>
+        <rect x="24" y="146" width="88" height="4" rx="2" fill="#e89870" fill-opacity="0.45"/>
+        <!-- Citation badge -->
+        <circle cx="118" cy="144" r="11" fill="url(#terra)"/>
+        <text x="118" y="148" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="11" font-weight="700" fill="#0e0c0a">1</text>
+      </g>
+      <!-- Label -->
+      <text x="70" y="220" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="12" font-weight="500" letter-spacing="0.12em" fill="#a0958a">SOURCES</text>
+    </g>
+
+    <!-- ========== CENTER: Retrieval / knowledge graph ========== -->
+    <g transform="translate(380, 70)">
+      <!-- Flow beams from left -->
+      <path d="M-90 130 C-20 110, 40 90, 120 115" fill="none" stroke="url(#flow)" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+      <path d="M-90 150 C-10 155, 50 140, 120 145" fill="none" stroke="url(#flow)" stroke-width="1.5" stroke-linecap="round" opacity="0.55"/>
+      <path d="M-90 170 C0 190, 60 175, 120 160" fill="none" stroke="url(#flow)" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+
+      <!-- Embedding constellation nodes -->
+      <g filter="url(#nodeGlow)">
+        <!-- Orbit rings -->
+        <circle cx="200" cy="140" r="92" fill="none" stroke="#ede8e0" stroke-opacity="0.06" stroke-width="1"/>
+        <circle cx="200" cy="140" r="62" fill="none" stroke="#d9775e" stroke-opacity="0.12" stroke-width="1" stroke-dasharray="4 6"/>
+        <circle cx="200" cy="140" r="36" fill="none" stroke="#6baa7a" stroke-opacity="0.15" stroke-width="1"/>
+
+        <!-- Connection web -->
+        <line x1="140" y1="90" x2="200" y2="140" stroke="#d9775e" stroke-opacity="0.35" stroke-width="1.2"/>
+        <line x1="260" y1="88" x2="200" y2="140" stroke="#e8925d" stroke-opacity="0.3" stroke-width="1.2"/>
+        <line x1="290" y1="150" x2="200" y2="140" stroke="#6baa7a" stroke-opacity="0.35" stroke-width="1.2"/>
+        <line x1="250" y1="200" x2="200" y2="140" stroke="#6baa7a" stroke-opacity="0.28" stroke-width="1.2"/>
+        <line x1="145" y1="195" x2="200" y2="140" stroke="#d9775e" stroke-opacity="0.28" stroke-width="1.2"/>
+        <line x1="120" y1="145" x2="200" y2="140" stroke="#e8925d" stroke-opacity="0.4" stroke-width="1.4"/>
+
+        <!-- Satellite nodes (chunks / vectors) -->
+        <circle cx="140" cy="90" r="7" fill="#d9775e"/>
+        <circle cx="260" cy="88" r="6" fill="#e8925d"/>
+        <circle cx="290" cy="150" r="7" fill="#6baa7a"/>
+        <circle cx="250" cy="200" r="5.5" fill="#7fbd8e"/>
+        <circle cx="145" cy="195" r="6" fill="#d9775e" fill-opacity="0.85"/>
+        <circle cx="120" cy="145" r="5" fill="#e89870"/>
+
+        <!-- Core node — query / retrieval engine -->
+        <circle cx="200" cy="140" r="22" fill="#1a1814" stroke="url(#terra)" stroke-width="2"/>
+        <circle cx="200" cy="140" r="14" fill="url(#sunset)" opacity="0.9"/>
+        <!-- Inner diamond / spark -->
+        <path d="M200 128 L208 140 L200 152 L192 140 Z" fill="#f5f0e8" opacity="0.95"/>
+      </g>
+
+      <!-- Floating vector ticks -->
+      <g opacity="0.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" fill="#a0958a">
+        <text x="95" y="70">[0.82, …]</text>
+        <text x="275" y="215">chunk · p.4</text>
+      </g>
+
+      <!-- Outflow to answer -->
+      <path d="M292 130 C360 115, 420 100, 490 120" fill="none" stroke="url(#flow)" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+      <path d="M292 150 C350 155, 410 145, 490 148" fill="none" stroke="url(#flow)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+
+      <text x="200" y="268" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="12" font-weight="500" letter-spacing="0.12em" fill="#a0958a">RETRIEVE · GROUND</text>
+    </g>
+
+    <!-- ========== RIGHT: Cited answer card ========== -->
+    <g transform="translate(920, 88)" filter="url(#softGlow)">
+      <rect x="0" y="0" width="280" height="210" rx="16" fill="url(#answerCard)" stroke="#6baa7a" stroke-opacity="0.35" stroke-width="1.5"/>
+      <!-- Status bar -->
+      <rect x="0" y="0" width="280" height="40" rx="16" fill="#221e1a"/>
+      <rect x="0" y="24" width="280" height="16" fill="#221e1a"/>
+      <circle cx="22" cy="20" r="5" fill="#6baa7a"/>
+      <text x="36" y="24" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="12" font-weight="600" fill="#ede8e0">Grounded answer</text>
+      <!-- Streaming lines -->
+      <rect x="20" y="60" width="200" height="8" rx="4" fill="#ede8e0" fill-opacity="0.16"/>
+      <rect x="20" y="80" width="240" height="7" rx="3.5" fill="#ede8e0" fill-opacity="0.1"/>
+      <rect x="20" y="98" width="220" height="7" rx="3.5" fill="#ede8e0" fill-opacity="0.09"/>
+      <!-- Inline citation chips -->
+      <g transform="translate(20, 118)">
+        <rect x="0" y="0" width="36" height="20" rx="10" fill="url(#terra)"/>
+        <text x="18" y="14" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" font-weight="700" fill="#0e0c0a">[1]</text>
+        <rect x="44" y="0" width="36" height="20" rx="10" fill="url(#sage)"/>
+        <text x="62" y="14" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" font-weight="700" fill="#0e0c0a">[2]</text>
+      </g>
+      <rect x="20" y="152" width="180" height="7" rx="3.5" fill="#ede8e0" fill-opacity="0.08"/>
+      <rect x="20" y="170" width="150" height="7" rx="3.5" fill="#ede8e0" fill-opacity="0.06"/>
+      <!-- Citation footer strip -->
+      <rect x="16" y="188" width="248" height="1" fill="#ede8e0" fill-opacity="0.06"/>
+      <text x="20" y="204" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="10" fill="#7a7065">2 sources · streaming</text>
+      <!-- Spark mark -->
+      <circle cx="252" cy="198" r="8" fill="#6baa7a" fill-opacity="0.2" stroke="#6baa7a" stroke-opacity="0.5"/>
+      <circle cx="252" cy="198" r="3" fill="#6baa7a"/>
+    </g>
+    <text x="1060" y="328" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="12" font-weight="500" letter-spacing="0.12em" fill="#a0958a">CITED ANSWERS</text>
+
+    <!-- ========== Brand lockup (center-bottom overlay band) ========== -->
+    <g transform="translate(640, 355)">
+      <!-- Wordmark -->
+      <g text-anchor="middle" filter="url(#textGlow)">
+        <text y="0" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="36" font-weight="700" letter-spacing="-0.02em" fill="url(#cream)">Sourceful</text>
+      </g>
+      <!-- Accent underline -->
+      <rect x="-48" y="12" width="96" height="3" rx="1.5" fill="url(#terra)"/>
+      <text y="36" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" font-size="13" font-weight="500" letter-spacing="0.18em" fill="#a0958a">DOCUMENTS → RETRIEVAL → GROUNDED ANSWERS</text>
+    </g>
+
+    <!-- Decorative corner marks -->
+    <g stroke="#ede8e0" stroke-opacity="0.12" stroke-width="1.5" fill="none">
+      <path d="M28 48 V28 H48"/>
+      <path d="M1252 48 V28 H1232"/>
+      <path d="M28 372 V392 H48"/>
+      <path d="M1252 372 V392 H1232"/>
+    </g>
+
+    <!-- Bottom edge glow line -->
+    <rect x="0" y="418" width="1280" height="2" fill="url(#sage)" opacity="0.35"/>
+  </g>
+</svg>
