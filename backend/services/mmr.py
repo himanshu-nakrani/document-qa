@@ -97,13 +97,21 @@ def mmr(
     seed = remaining.pop(0)
     selected.append(seed)
 
+    # Cache the maximum similarity of each chunk to any chunk in `selected`
+    max_sim_to_selected = {c.chunk_id: -math.inf for c in candidates}
+
     while remaining and len(selected) < top_k:
         best_idx = 0
         best_score = -math.inf
+        last_selected = selected[-1]
+
         for idx, cand in enumerate(remaining):
-            sim_to_selected = max(
-                (similarity(cand, s) for s in selected), default=0.0
-            )
+            # We only need to check similarity with the most recently added chunk
+            sim = similarity(cand, last_selected)
+            if sim > max_sim_to_selected[cand.chunk_id]:
+                max_sim_to_selected[cand.chunk_id] = sim
+
+            sim_to_selected = max_sim_to_selected[cand.chunk_id]
             score = lam * relevance[cand.chunk_id] - (1.0 - lam) * sim_to_selected
             if score > best_score:
                 best_score = score
