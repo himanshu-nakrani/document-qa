@@ -333,6 +333,7 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
                     URL
                   </span>
                   <input
+                    type="url"
                     value={urlValue}
                     onChange={(e) => setUrlValue(e.target.value)}
                     placeholder="https://example.com/article"
