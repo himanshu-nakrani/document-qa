@@ -348,14 +348,14 @@ class ArtifactListResponse(BaseModel):
 class CreateArtifactRequest(BaseModel):
     artifact_type: Literal["user_note", "saved_answer", "saved_brief", "extraction_result"] = "user_note"
     title: str = Field(min_length=1, max_length=300)
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=100_000)
     metadata: dict | None = None
     source_message_id: str | None = None
 
 
 class UpdateArtifactRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
-    content: str | None = None
+    content: str | None = Field(default=None, max_length=100_000)
     metadata: dict | None = None
 
 
