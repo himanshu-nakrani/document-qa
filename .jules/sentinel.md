@@ -54,3 +54,8 @@
 **Vulnerability:** Found unmitigated `httpx.AsyncClient` usages in `backend/services/reranker.py`. The HTTP client calls to Cohere and Jina APIs were missing the `event_hooks=get_ssrf_event_hooks()` configuration, making them potentially vulnerable to Server-Side Request Forgery (SSRF) if the APIs returned unexpected redirects or if configurations were manipulated.
 **Learning:** `httpx.AsyncClient` MUST ALWAYS be instantiated with SSRF mitigation hooks (`get_ssrf_event_hooks()`) as a defense-in-depth measure, even when URLs appear hardcoded, to protect against DNS rebinding, unexpected redirects, or future configuration changes.
 **Prevention:** Always enforce that all external network calls using `httpx.AsyncClient` include `get_ssrf_event_hooks()` from `backend.utils.network`.
+
+## 2025-05-25 - [MEDIUM] Missing Input Length Limit on Artifact Content (DoS Risk)
+**Vulnerability:** The `content` field in `CreateArtifactRequest` and `UpdateArtifactRequest` lacked a maximum length validation. This could allow malicious users to submit excessively large payloads, potentially causing Denial of Service (DoS) by exhausting memory or database storage.
+**Learning:** Input validation in a FastAPI application should be handled idiomaticaly using Pydantic's `Field` attributes on the schema, ensuring early rejection (HTTP 422) before reaching router logic.
+**Prevention:** Always define `max_length` using Pydantic's `Field` for user-provided string inputs, especially those representing free-form text or document content, to prevent unbounded payload submissions.
