@@ -337,6 +337,7 @@ className="text-[11px] px-2 py-1 rounded-lg outline-none focus-visible:ring-2 fo
                       value={memberUserId}
                       onChange={(e) => setMemberUserId(e.target.value)}
                       placeholder="User ID"
+                      aria-label="User ID"
                       className="flex-1 min-w-[180px] bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] rounded-lg px-2 py-1.5"
                       style={{
                         color: "var(--text-primary)",
@@ -446,6 +447,7 @@ className="text-[11px] px-2 py-1 rounded-lg outline-none focus-visible:ring-2 fo
                       onChange={(e) => setInviteEmail(e.target.value)}
                       placeholder="teammate@example.com"
                       type="email"
+                      aria-label="Teammate email address"
                       className="flex-1 min-w-[200px] bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] rounded-lg px-2 py-1.5"
                       style={{
                         color: "var(--text-primary)",
