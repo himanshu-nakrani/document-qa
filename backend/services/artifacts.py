@@ -12,6 +12,11 @@ import json
 import uuid
 from typing import Any
 
+try:
+    import orjson
+except ImportError:
+    orjson = None
+
 from backend.database import execute, fetch_all, fetch_one
 from backend.settings import settings
 
@@ -149,7 +154,11 @@ async def create_artifact(
     if not content or not content.strip():
         raise ValueError("Artifact content cannot be empty.")
     artifact_id = str(uuid.uuid4())
-    meta_payload = json.dumps(metadata) if metadata else None
+    # ⚡ BOLT OPTIMIZATION: Use fast orjson serialization when available.
+    if metadata:
+        meta_payload = orjson.dumps(metadata).decode("utf-8") if orjson else json.dumps(metadata)
+    else:
+        meta_payload = None
     await execute(
         f"""
         INSERT INTO workspace_artifacts (
@@ -216,7 +225,8 @@ async def update_artifact(
         params.append(content)
     if metadata is not None:
         sets.append("metadata_json = ?")
-        params.append(json.dumps(metadata))
+        # ⚡ BOLT OPTIMIZATION: Use fast orjson serialization when available.
+        params.append(orjson.dumps(metadata).decode("utf-8") if orjson else json.dumps(metadata))
     if not sets:
         return existing
     sets.append(f"updated_at = {TIMESTAMP_SQL}")
