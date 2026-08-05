@@ -2,7 +2,18 @@
 
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ChevronDown, Contrast, KeyRound, Palette, RotateCcw, Search, UserCircle, Wind, X } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  Contrast,
+  KeyRound,
+  Palette,
+  RotateCcw,
+  Search,
+  UserCircle,
+  Wind,
+  X,
+} from "lucide-react";
 import {
   fetchModels,
   getGoogleOAuthClientId,
@@ -75,7 +86,12 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     };
 
     loadModels();
-  }, [open, settings.provider, settings.providerApiKey, settings.clientSessionId]);
+  }, [
+    open,
+    settings.provider,
+    settings.providerApiKey,
+    settings.clientSessionId,
+  ]);
 
   if (!open) return null;
   const user = state.currentUser;
@@ -113,12 +129,21 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.25, ease: EASE_OUT }}
       >
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
+            <h2
+              className="text-sm font-semibold"
+              style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}
+            >
               Settings
             </h2>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+            <p
+              className="text-[11px] mt-0.5"
+              style={{ color: "var(--text-muted)" }}
+            >
               Credentials stored in this browser session only.
             </p>
           </div>
@@ -129,7 +154,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             className="p-1.5 rounded-xl"
             style={{ color: "var(--text-muted)" }}
             aria-label="Close settings"
-            whileHover={{ background: "var(--bg-surface)", color: "var(--text-secondary)" }}
+            whileHover={{
+              background: "var(--bg-surface)",
+              color: "var(--text-secondary)",
+            }}
             whileTap={{ scale: 0.9 }}
           >
             <X size={16} />
@@ -139,7 +167,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         <div className="px-5 py-5 flex flex-col gap-5">
           {/* Provider Selection */}
           <div className="flex flex-col gap-2">
-            <label className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+            <label
+              className="text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
               Provider
             </label>
             <div className="flex gap-1.5">
@@ -147,12 +178,16 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 <motion.button
                   key={provider.value}
                   type="button"
-                  onClick={() => dispatch({ type: "SET_PROVIDER", payload: provider.value })}
+                  onClick={() =>
+                    dispatch({ type: "SET_PROVIDER", payload: provider.value })
+                  }
                   aria-pressed={settings.provider === provider.value}
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium"
                   style={{
                     background:
-                      settings.provider === provider.value ? "var(--accent-brand-soft)" : "var(--bg-surface)",
+                      settings.provider === provider.value
+                        ? "var(--accent-brand-soft)"
+                        : "var(--bg-surface)",
                     border: `1px solid ${
                       settings.provider === provider.value
                         ? "var(--accent-brand)"
@@ -165,7 +200,15 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   }}
                   whileTap={{ scale: 0.97 }}
                 >
-                  <span className="text-xs font-bold" style={{ color: settings.provider === provider.value ? "var(--accent-brand)" : "var(--text-muted)" }}>
+                  <span
+                    className="text-xs font-bold"
+                    style={{
+                      color:
+                        settings.provider === provider.value
+                          ? "var(--accent-brand)"
+                          : "var(--text-muted)",
+                    }}
+                  >
                     {provider.icon}
                   </span>
                   {provider.label}
@@ -179,14 +222,17 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             icon={<KeyRound size={13} />}
             value={settings.providerApiKey}
             onChange={(value) =>
-              dispatch({ type: "SET_SETTINGS", payload: { providerApiKey: value } })
+              dispatch({
+                type: "SET_SETTINGS",
+                payload: { providerApiKey: value },
+              })
             }
             placeholder={
               settings.provider === "openai"
                 ? "sk-..."
-                /* : settings.provider === "vertex_search"
+                : /* : settings.provider === "vertex_search"
                   ? "Google AI API key (for Gemini chat)" */
-                  : "Google AI API key"
+                  "Google AI API key"
             }
             help="Used for uploads, reprocessing, embeddings, and chat."
           />
@@ -198,7 +244,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               value={settings.chatModel}
               options={models?.chat_models || [DEFAULT_CHAT[settings.provider]]}
               onChange={(value) =>
-                dispatch({ type: "SET_SETTINGS", payload: { chatModel: value } })
+                dispatch({
+                  type: "SET_SETTINGS",
+                  payload: { chatModel: value },
+                })
               }
               loading={modelsLoading}
               disabled={!settings.providerApiKey.trim()}
@@ -206,9 +255,16 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <SelectField
               label="Embedding Model"
               value={settings.embeddingModel}
-              options={models?.embedding_models || [DEFAULT_EMBEDDING[settings.provider]]}
+              options={
+                models?.embedding_models || [
+                  DEFAULT_EMBEDDING[settings.provider],
+                ]
+              }
               onChange={(value) =>
-                dispatch({ type: "SET_SETTINGS", payload: { embeddingModel: value } })
+                dispatch({
+                  type: "SET_SETTINGS",
+                  payload: { embeddingModel: value },
+                })
               }
               loading={modelsLoading}
               disabled={!settings.providerApiKey.trim()}
@@ -217,11 +273,25 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
           <div
             className="rounded-xl p-3 flex items-start gap-3"
-            style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border)",
+            }}
           >
-            <CheckCircle2 size={14} style={{ color: "var(--success)", marginTop: 2, flexShrink: 0 }} />
-            <div className="text-[11px] leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
-              <p>Session: <span style={{ color: "var(--text-secondary)" }}>{settings.clientSessionId}</span></p>
+            <CheckCircle2
+              size={14}
+              style={{ color: "var(--success)", marginTop: 2, flexShrink: 0 }}
+            />
+            <div
+              className="text-[11px] leading-relaxed"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              <p>
+                Session:{" "}
+                <span style={{ color: "var(--text-secondary)" }}>
+                  {settings.clientSessionId}
+                </span>
+              </p>
               <p className="mt-0.5">
                 Models remembered locally. Keys stay in session storage.
               </p>
@@ -230,36 +300,60 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
           {/* Display Preferences */}
           <div className="flex flex-col gap-3">
-            <label className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+            <label
+              className="text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: "var(--text-muted)" }}
+            >
               Display
             </label>
 
             {/* Accent pack */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs flex items-center gap-1.5" style={{ color: "var(--text-secondary)" }}>
+              <span
+                className="text-xs flex items-center gap-1.5"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 <Palette size={12} />
                 Accent Color
               </span>
               <div className="flex gap-1.5">
                 {(["terracotta", "emerald", "amber"] as const).map((pack) => {
-                  const colors = { terracotta: "#d9775e", emerald: "#6baa7a", amber: "#e8923c" };
-                  const labels = { terracotta: "Terracotta", emerald: "Sage", amber: "Amber" };
+                  const colors = {
+                    terracotta: "#d9775e",
+                    emerald: "#6baa7a",
+                    amber: "#e8923c",
+                  };
+                  const labels = {
+                    terracotta: "Terracotta",
+                    emerald: "Sage",
+                    amber: "Amber",
+                  };
                   const active = settings.accentPack === pack;
                   return (
                     <motion.button
                       key={pack}
                       type="button"
-                      onClick={() => dispatch({ type: "SET_SETTINGS", payload: { accentPack: pack } })}
+                      onClick={() =>
+                        dispatch({
+                          type: "SET_SETTINGS",
+                          payload: { accentPack: pack },
+                        })
+                      }
                       aria-pressed={active}
                       className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-medium"
                       style={{
-                        background: active ? `${colors[pack]}18` : "var(--bg-surface)",
+                        background: active
+                          ? `${colors[pack]}18`
+                          : "var(--bg-surface)",
                         border: `1px solid ${active ? colors[pack] : "var(--border)"}`,
                         color: active ? colors[pack] : "var(--text-secondary)",
                       }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: colors[pack] }} />
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: colors[pack] }}
+                      />
                       {labels[pack]}
                     </motion.button>
                   );
@@ -271,12 +365,21 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => dispatch({ type: "SET_SETTINGS", payload: { highContrast: !settings.highContrast } })}
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SETTINGS",
+                    payload: { highContrast: !settings.highContrast },
+                  })
+                }
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
                 style={{
-                  background: settings.highContrast ? "var(--accent-brand-soft)" : "var(--bg-surface)",
+                  background: settings.highContrast
+                    ? "var(--accent-brand-soft)"
+                    : "var(--bg-surface)",
                   border: `1px solid ${settings.highContrast ? "var(--accent-brand)" : "var(--border)"}`,
-                  color: settings.highContrast ? "var(--accent-brand)" : "var(--text-secondary)",
+                  color: settings.highContrast
+                    ? "var(--accent-brand)"
+                    : "var(--text-secondary)",
                 }}
                 aria-pressed={settings.highContrast}
               >
@@ -285,12 +388,21 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               </button>
               <button
                 type="button"
-                onClick={() => dispatch({ type: "SET_SETTINGS", payload: { reducedMotion: !settings.reducedMotion } })}
+                onClick={() =>
+                  dispatch({
+                    type: "SET_SETTINGS",
+                    payload: { reducedMotion: !settings.reducedMotion },
+                  })
+                }
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
                 style={{
-                  background: settings.reducedMotion ? "var(--accent-brand-soft)" : "var(--bg-surface)",
+                  background: settings.reducedMotion
+                    ? "var(--accent-brand-soft)"
+                    : "var(--bg-surface)",
                   border: `1px solid ${settings.reducedMotion ? "var(--accent-brand)" : "var(--border)"}`,
-                  color: settings.reducedMotion ? "var(--accent-brand)" : "var(--text-secondary)",
+                  color: settings.reducedMotion
+                    ? "var(--accent-brand)"
+                    : "var(--text-secondary)",
                 }}
                 aria-pressed={settings.reducedMotion}
               >
@@ -314,7 +426,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 min={1}
                 max={20}
                 step={1}
-                onChange={(value) => dispatch({ type: "SET_SETTINGS", payload: { topK: value } })}
+                onChange={(value) =>
+                  dispatch({ type: "SET_SETTINGS", payload: { topK: value } })
+                }
                 format={(v) => `${v} chunks`}
                 help="Number of document chunks retrieved per query."
               />
@@ -324,8 +438,13 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 min={0}
                 max={1}
                 step={0.05}
-                onChange={(value) => dispatch({ type: "SET_SETTINGS", payload: { similarityThreshold: value } })}
-                format={(v) => v === 0 ? "Off" : v.toFixed(2)}
+                onChange={(value) =>
+                  dispatch({
+                    type: "SET_SETTINGS",
+                    payload: { similarityThreshold: value },
+                  })
+                }
+                format={(v) => (v === 0 ? "Off" : v.toFixed(2))}
                 help="Minimum similarity score to include a chunk."
               />
             </div>
@@ -340,13 +459,19 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           >
             {user ? (
               <div className="flex items-center justify-between">
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                <p
+                  className="text-sm"
+                  style={{ color: "var(--text-secondary)" }}
+                >
                   Your data is synced across devices.
                 </p>
                 <motion.button
                   type="button"
                   className="px-3 py-1.5 rounded-xl text-xs"
-                  style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
+                  style={{
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border)",
+                  }}
                   onClick={async () => {
                     await logout();
                     dispatch({ type: "SET_CURRENT_USER", payload: null });
@@ -359,30 +484,45 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="Email"
-                    aria-label="Email"
-                    className="rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                    style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-                  />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Password"
-                    aria-label="Password"
-                    className="rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-                    style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-                  />
+                  <label className="flex flex-col gap-1">
+                    <span className="sr-only">Email</span>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="Email"
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                      style={{
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-primary)",
+                      }}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="sr-only">Password</span>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="Password"
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                      style={{
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-primary)",
+                      }}
+                    />
+                  </label>
                 </div>
                 <div className="flex gap-2">
                   <motion.button
                     type="button"
                     className="flex-1 px-4 py-2 rounded-xl text-sm"
-                    style={{ background: "var(--gradient-accent)", color: "#fff" }}
+                    style={{
+                      background: "var(--gradient-accent)",
+                      color: "#fff",
+                    }}
                     onClick={async () => {
                       try {
                         const next = await login(email.trim(), password);
@@ -391,7 +531,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                         setEmail("");
                         setPassword("");
                       } catch (error) {
-                        setAuthError(error instanceof Error ? error.message : "Login failed.");
+                        setAuthError(
+                          error instanceof Error
+                            ? error.message
+                            : "Login failed.",
+                        );
                       }
                     }}
                     whileTap={{ scale: 0.97 }}
@@ -401,7 +545,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   <motion.button
                     type="button"
                     className="flex-1 px-4 py-2 rounded-xl text-sm"
-                    style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                    style={{
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-primary)",
+                    }}
                     onClick={async () => {
                       try {
                         const next = await signup(email.trim(), password);
@@ -410,7 +558,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                         setEmail("");
                         setPassword("");
                       } catch (error) {
-                        setAuthError(error instanceof Error ? error.message : "Signup failed.");
+                        setAuthError(
+                          error instanceof Error
+                            ? error.message
+                            : "Signup failed.",
+                        );
                       }
                     }}
                     whileTap={{ scale: 0.97 }}
@@ -444,10 +596,22 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     whileTap={{ scale: 0.97 }}
                   >
                     <svg width="16" height="16" viewBox="0 0 48 48">
-                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                      <path
+                        fill="#EA4335"
+                        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                      />
                     </svg>
                     Sign in with Google
                   </motion.button>
@@ -478,8 +642,15 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               })
             }
             className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-            style={{ background: "var(--bg-surface)", color: "var(--text-tertiary)", border: "1px solid var(--border)" }}
-            whileHover={{ borderColor: "var(--border-hover)", color: "var(--text-secondary)" }}
+            style={{
+              background: "var(--bg-surface)",
+              color: "var(--text-tertiary)",
+              border: "1px solid var(--border)",
+            }}
+            whileHover={{
+              borderColor: "var(--border-hover)",
+              color: "var(--text-secondary)",
+            }}
             whileTap={{ scale: 0.95 }}
           >
             <RotateCcw size={12} />
@@ -522,7 +693,10 @@ function CollapsibleSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{ border: "1px solid var(--border)" }}
+    >
       {/* [a11y] Added aria-expanded to communicate toggle state to assistive technology */}
       <button
         type="button"
@@ -531,7 +705,10 @@ function CollapsibleSection({
         className="w-full flex items-center justify-between px-4 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
         style={{ background: "var(--bg-surface)" }}
       >
-        <span className="flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+        <span
+          className="flex items-center gap-2"
+          style={{ color: "var(--text-secondary)" }}
+        >
           {icon}
           <span className="truncate">{title}</span>
         </span>
@@ -551,7 +728,10 @@ function CollapsibleSection({
             transition={{ duration: 0.25, ease: EASE_OUT }}
             className="overflow-hidden"
           >
-            <div className="px-4 py-4" style={{ background: "var(--bg-secondary)" }}>
+            <div
+              className="px-4 py-4"
+              style={{ background: "var(--bg-secondary)" }}
+            >
               {children}
             </div>
           </motion.div>
@@ -592,11 +772,18 @@ function Field({
   const id = React.useId();
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+      <label
+        htmlFor={id}
+        className="text-[10px] font-semibold uppercase tracking-widest"
+        style={{ color: "var(--text-muted)" }}
+      >
         {label}
       </label>
       <div className="relative">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }}>
+        <div
+          className="absolute left-3 top-1/2 -translate-y-1/2"
+          style={{ color: "var(--text-muted)" }}
+        >
           {icon}
         </div>
         <input
@@ -648,7 +835,11 @@ function SelectField({
   const id = React.useId();
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+      <label
+        htmlFor={id}
+        className="text-[10px] font-semibold uppercase tracking-widest"
+        style={{ color: "var(--text-muted)" }}
+      >
         {label}
       </label>
       <div className="relative">
@@ -727,10 +918,17 @@ function SliderField({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <label htmlFor={id} className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+        <label
+          htmlFor={id}
+          className="text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: "var(--text-muted)" }}
+        >
           {label}
         </label>
-        <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+        <span
+          className="text-xs font-medium"
+          style={{ color: "var(--text-primary)" }}
+        >
           {format(value)}
         </span>
       </div>
@@ -748,7 +946,9 @@ function SliderField({
           accentColor: "var(--accent-brand)",
         }}
       />
-      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{help}</p>
+      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+        {help}
+      </p>
     </div>
   );
 }
