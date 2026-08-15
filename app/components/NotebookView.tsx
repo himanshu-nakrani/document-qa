@@ -21,6 +21,9 @@ import {
   type DocumentInfo,
 } from "../lib/api";
 import { useStore } from "../lib/store";
+import { transitionFast, transitionNormal } from "../lib/motion";
+import { CitationPreview } from "./CitationPreview";
+import { Button, ErrorBanner, StatusDot } from "./ui";
 
 const NotebookPdf = dynamic(
   () => import("./NotebookPdf").then((module) => module.NotebookPdf),
@@ -28,7 +31,10 @@ const NotebookPdf = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2
+          className="h-7 w-7 animate-spin"
+          style={{ color: "var(--accent-primary)" }}
+        />
       </div>
     ),
   }
@@ -52,6 +58,83 @@ interface Highlight {
   text: string;
 }
 
+/**
+ * Ghost icon button: quiet, tooltip-bearing control for header actions
+ * (close, page nav, zoom). Disabled state dims via text tokens.
+ */
+function GhostIconButton({
+  label,
+  onClick,
+  disabled = false,
+  compact = false,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  compact?: boolean;
+  children: React.ReactNode;
+}) {
+  const [hover, setHover] = useState(false);
+  const showHover = hover && !disabled;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="inline-flex items-center justify-center rounded-md transition-colors focus-ring disabled:cursor-not-allowed"
+      style={{
+        padding: compact ? 4 : 6,
+        color: disabled
+          ? "var(--text-faint)"
+          : showHover
+            ? "var(--text-primary)"
+            : "var(--text-secondary)",
+        background: showHover ? "var(--bg-surface-hover)" : "transparent",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Mono [n] / p.N evidence chip in the accent color; jumps to the cited page. */
+function CitationChip({
+  citation,
+  index,
+  onClick,
+}: {
+  citation: Citation;
+  index: number;
+  onClick: (citation: Citation) => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <CitationPreview citation={citation}>
+      <button
+        type="button"
+        onClick={() => onClick(citation)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        className="data-num inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] transition-colors focus-ring"
+        style={{
+          borderRadius: "var(--radius-xs)",
+          background: hover ? "var(--accent-primary-glow)" : "var(--accent-primary-soft)",
+          color: "var(--accent-primary)",
+          border: `1px solid ${hover ? "var(--accent-primary)" : "var(--accent-primary-soft)"}`,
+        }}
+        >
+          <Highlighter className="h-3 w-3" style={{ color: "var(--accent-primary)" }} />
+          {citation.page_number ? `p. ${citation.page_number}` : `[${index + 1}]`}
+        </button>
+    </CitationPreview>
+  );
+}
+
 // ⚡ BOLT OPTIMIZATION:
 // Wrapped NotebookMessageBubble in React.memo to prevent expensive React re-renders
 // for older messages during rapid state updates, such as when typing in the input
@@ -63,31 +146,38 @@ const NotebookMessageBubble = React.memo(function NotebookMessageBubble({
   message: NotebookMessage;
   onCitationClick: (citation: Citation) => void;
 }) {
+  const isUser = message.role === "user";
   return (
-    <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+    <div className="flex" style={{ justifyContent: isUser ? "flex-end" : "flex-start" }}>
       <div
-        className={`max-w-[85%] rounded-lg p-3 ${
-          message.role === "user"
-            ? "bg-blue-600 text-white"
-            : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white"
-        }`}
+        className="max-w-[85%] p-3"
+        style={{
+          // User turns are hairline surface cards; assistant turns sit plain on
+          // the pane with a 2px left border edge (matches the main chat).
+          background: isUser ? "var(--bg-surface)" : "transparent",
+          border: isUser ? "1px solid var(--border)" : undefined,
+          borderLeft: isUser ? undefined : "2px solid var(--border-hover)",
+          borderRadius: isUser ? "var(--radius-lg)" : "var(--radius-xs)",
+          color: "var(--text-primary)",
+        }}
       >
-        <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
         {message.citations && message.citations.length > 0 && (
-          <div className="mt-2 border-t border-gray-200 pt-2 dark:border-gray-700">
-            <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Sources:</p>
+          <div className="mt-2.5 pt-2.5" style={{ borderTop: "1px solid var(--border)" }}>
+            <p
+              className="mb-1.5 text-[10px] uppercase tracking-widest"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              Sources
+            </p>
             <div className="flex flex-wrap gap-1">
               {message.citations.map((citation, index) => (
-                <button
+                <CitationChip
                   key={citation.chunk_id}
-                  type="button"
-                  onClick={() => onCitationClick(citation)}
-                  className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs transition-colors hover:bg-yellow-100 dark:bg-gray-700 dark:hover:bg-yellow-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  title={citation.excerpt}
-                >
-                  <Highlighter className="h-3 w-3 text-yellow-600" />
-                  {citation.page_number ? `p. ${citation.page_number}` : `[${index + 1}]`}
-                </button>
+                  citation={citation}
+                  index={index}
+                  onClick={onCitationClick}
+                />
               ))}
             </div>
           </div>
@@ -123,9 +213,19 @@ export function NotebookView({ documentId, initialPage = 1, onClose }: NotebookV
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  // Below md the notebook stacks (PDF over chat) and the drag divider is hidden.
+  const [isDesktop, setIsDesktop] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!auth.clientSessionId || !documentId) return;
@@ -173,12 +273,20 @@ export function NotebookView({ documentId, initialPage = 1, onClose }: NotebookV
     setPageNumber((current) => Math.min(current, nextNumPages || 1));
   }, []);
 
+  // Shared width math for mouse and touch drag: chat pane is anchored to the
+  // right edge, so the new width is the container width minus the pointer's
+  // offset from the container's left edge. Clamped to 300–600px.
+  const updateChatWidthFromClientX = useCallback((clientX: number) => {
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const newWidth = containerRect.width - clientX + containerRect.left;
+    setChatWidth(Math.max(300, Math.min(600, newWidth)));
+  }, []);
+
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return;
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = containerRect.width - event.clientX + containerRect.left;
-      setChatWidth(Math.max(300, Math.min(600, newWidth)));
+      if (!isDragging.current) return;
+      updateChatWidthFromClientX(event.clientX);
     };
 
     const handleMouseUp = () => {
@@ -191,6 +299,23 @@ export function NotebookView({ documentId, initialPage = 1, onClose }: NotebookV
       window.document.removeEventListener("mousemove", handleMouseMove);
       window.document.removeEventListener("mouseup", handleMouseUp);
     };
+  }, [updateChatWidthFromClientX]);
+
+  const handleDividerTouchStart = useCallback(() => {
+    isDragging.current = true;
+  }, []);
+
+  const handleDividerTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      if (!isDragging.current) return;
+      const touch = event.touches[0];
+      if (touch) updateChatWidthFromClientX(touch.clientX);
+    },
+    [updateChatWidthFromClientX]
+  );
+
+  const handleDividerTouchEnd = useCallback(() => {
+    isDragging.current = false;
   }, []);
 
   const closeNotebook = () => {
@@ -283,102 +408,129 @@ export function NotebookView({ documentId, initialPage = 1, onClose }: NotebookV
   };
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50 flex bg-white dark:bg-gray-900">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-gray-700 dark:bg-gray-800">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={closeNotebook}
-              className="rounded-lg p-2 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-label="Close notebook"
-              title="Close notebook"
-            >
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-50 flex flex-col md:flex-row"
+      style={{ background: "var(--bg-primary)" }}
+    >
+      <div className="flex h-[60vh] min-h-0 flex-col md:h-auto md:min-w-0 md:flex-1">
+        {/* Header: hairline bottom rule, ghost icon controls, data-num readouts. */}
+        <div
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 py-2 md:px-4"
+          style={{ borderBottom: "1px solid var(--border)", background: "var(--bg-secondary)" }}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <GhostIconButton label="Close notebook" onClick={closeNotebook}>
               <X className="h-5 w-5" />
-            </button>
-            <h2 className="max-w-md truncate font-semibold text-gray-900 dark:text-white">
+            </GhostIconButton>
+            <h2
+              className="display max-w-md truncate text-sm font-semibold"
+              style={{ color: "var(--text-primary)" }}
+            >
               {doc?.filename ?? "Notebook"}
             </h2>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="flex items-center gap-1.5">
+              <GhostIconButton
+                label="Previous page"
                 onClick={() => changePage(-1)}
                 disabled={pageNumber <= 1}
-                className="rounded p-1.5 hover:bg-gray-200 disabled:opacity-50 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="Previous page"
-                title="Previous page"
+                compact
               >
                 <ChevronLeft className="h-5 w-5" />
-              </button>
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Page {pageNumber} of {numPages || "-"}
+              </GhostIconButton>
+              <span
+                className="text-[10px] uppercase tracking-widest"
+                style={{ color: "var(--text-tertiary)" }}
+                title={`Page ${pageNumber} of ${numPages || "-"}`}
+              >
+                page
               </span>
-              <button
-                type="button"
+              <span
+                className="data-num min-w-12 text-center text-xs"
+                style={{ color: "var(--text-secondary)" }}
+                title={`Page ${pageNumber} of ${numPages || "-"}`}
+              >
+                {pageNumber} / {numPages || "–"}
+              </span>
+              <GhostIconButton
+                label="Next page"
                 onClick={() => changePage(1)}
                 disabled={!numPages || pageNumber >= numPages}
-                className="rounded p-1.5 hover:bg-gray-200 disabled:opacity-50 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="Next page"
-                title="Next page"
+                compact
               >
                 <ChevronRight className="h-5 w-5" />
-              </button>
+              </GhostIconButton>
             </div>
 
-            <div className="flex items-center gap-1 border-l border-gray-300 pl-4 dark:border-gray-600">
-              <button
-                type="button"
+            <div
+              className="flex items-center gap-1 pl-3 md:pl-4"
+              style={{ borderLeft: "1px solid var(--border)" }}
+            >
+              <GhostIconButton
+                label="Zoom out"
                 onClick={() => setScale((current) => Math.max(0.5, current - 0.1))}
-                className="rounded p-1.5 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="Zoom out"
-                title="Zoom out"
+                compact
               >
-                -
-              </button>
-              <span className="min-w-12 text-center text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm leading-none">-</span>
+              </GhostIconButton>
+              <span
+                className="data-num min-w-12 text-center text-xs"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 {Math.round(scale * 100)}%
               </span>
-              <button
-                type="button"
+              <GhostIconButton
+                label="Zoom in"
                 onClick={() => setScale((current) => Math.min(2, current + 0.1))}
-                className="rounded p-1.5 text-sm hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="Zoom in"
-                title="Zoom in"
+                compact
               >
-                +
-              </button>
+                <span className="text-sm leading-none">+</span>
+              </GhostIconButton>
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setIsChatOpen((current) => !current)}
               aria-expanded={isChatOpen}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-white transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
             >
-              <MessageSquare className="h-4 w-4" />
-              <span className="text-sm">{isChatOpen ? "Hide Chat" : "Show Chat"}</span>
-            </button>
+              <MessageSquare className="h-3.5 w-3.5" />
+              {isChatOpen ? "Hide Chat" : "Show Chat"}
+            </Button>
           </div>
         </div>
 
-        <div className="flex flex-1 justify-center overflow-auto bg-gray-100 p-8 dark:bg-gray-950">
+        {/* PDF canvas: tertiary well, page card carries the hairline chrome. */}
+        <div
+          className="flex flex-1 justify-center overflow-auto p-4 md:p-8"
+          style={{ background: "var(--bg-tertiary)" }}
+        >
           {documentError || pdfError ? (
-            <div className="flex h-full flex-col items-center justify-center text-center text-gray-500">
-              <FileText className="mb-4 h-16 w-16" />
-              <p>{documentError || pdfError}</p>
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <span
+                className="inline-flex rounded-lg p-3"
+                style={{
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <FileText className="h-8 w-8" />
+              </span>
+              <ErrorBanner message={documentError || pdfError || "Unable to load document."} />
             </div>
           ) : !pdfUrl ? (
-            <div className="flex h-full items-center justify-center gap-2 text-gray-500">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading document</span>
+            <div className="flex h-full items-center justify-center">
+              <StatusDot tone="processing" label="Loading document" pulse />
             </div>
           ) : (
             <NotebookPdf
               file={pdfUrl}
               onLoadSuccess={onDocumentLoadSuccess}
+              onNavigateToPage={goToPage}
               pageNumber={pageNumber}
               scale={scale}
             />
@@ -386,12 +538,22 @@ export function NotebookView({ documentId, initialPage = 1, onClose }: NotebookV
         </div>
       </div>
 
+      {/* Drag divider: 4px hit area, hairline, brightens on hover; touch supported. */}
       {isChatOpen && (
-        <div
+        <motion.div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat pane"
           onMouseDown={() => {
             isDragging.current = true;
           }}
-          className="w-1 cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-500 dark:bg-gray-700"
+          onTouchStart={handleDividerTouchStart}
+          onTouchMove={handleDividerTouchMove}
+          onTouchEnd={handleDividerTouchEnd}
+          whileHover={{ backgroundColor: "var(--border-accent)" }}
+          transition={transitionFast}
+          className="hidden w-1 cursor-col-resize touch-none md:block"
+          style={{ background: "var(--border)" }}
         />
       )}
 
@@ -399,80 +561,133 @@ export function NotebookView({ documentId, initialPage = 1, onClose }: NotebookV
         {isChatOpen && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: chatWidth, opacity: 1 }}
+            animate={{ width: isDesktop ? chatWidth : "100%", opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="flex flex-col border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
-            style={{ width: chatWidth }}
+            transition={transitionNormal}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-none"
+            style={{
+              width: isDesktop ? chatWidth : "100%",
+              background: "var(--bg-secondary)",
+              borderLeft: isDesktop ? "1px solid var(--border)" : undefined,
+              borderTop: isDesktop ? undefined : "1px solid var(--border)",
+            }}
           >
-            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-              <h3 className="flex items-center gap-2 font-semibold text-gray-900 dark:text-white">
-                <MessageSquare className="h-5 w-5 text-blue-600" />
-                Chat with Document
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsChatOpen(false)}
-                className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                aria-label="Hide chat"
-                title="Hide chat"
+            <div className="flex h-full min-h-0 flex-col">
+              <div
+                className="flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: "1px solid var(--border)" }}
               >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 space-y-4 overflow-y-auto p-4">
-              {messages.length === 0 ? (
-                <div className="mt-8 text-center text-gray-500">
-                  <MessageSquare className="mx-auto mb-3 h-12 w-12 opacity-50" />
-                  <p>Ask questions about this document</p>
-                  <p className="mt-2 text-sm">Click citations to jump to the relevant page</p>
-                </div>
-              ) : (
-                messages.map((message) => (
-                  <NotebookMessageBubble
-                    key={message.id}
-                    message={message}
-                    onCitationClick={handleCitationClick}
-                  />
-                ))
-              )}
-              {activeHighlight && (
-                <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-900">
-                  Page {activeHighlight.page}: {activeHighlight.text}
-                </div>
-              )}
-              {chatError && <p className="text-sm text-red-500">{chatError}</p>}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="rounded-lg bg-gray-100 p-3 dark:bg-gray-800">
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-200 p-4 dark:border-gray-700">
-              <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  type="text"
-                  placeholder="Ask a question..."
-                  aria-label="Ask a question"
-                  className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                  disabled={isLoading}
-                />
-                <button
-                  type="submit"
-                  disabled={isLoading || !input.trim()}
-                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-white transition-colors hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
-                  aria-label="Send message"
-                  title="Send message"
+                <h3
+                  className="display flex items-center gap-2 text-sm font-semibold"
+                  style={{ color: "var(--text-primary)" }}
                 >
-                  <Send className="h-4 w-4" />
-                </button>
-              </form>
+                  <MessageSquare
+                    className="h-4 w-4"
+                    style={{ color: "var(--accent-primary)" }}
+                  />
+                  Chat with Document
+                </h3>
+                <GhostIconButton label="Hide chat" onClick={() => setIsChatOpen(false)} compact>
+                  <X className="h-4 w-4" />
+                </GhostIconButton>
+              </div>
+
+              <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                {messages.length === 0 ? (
+                  <div className="mt-8 text-center" style={{ color: "var(--text-tertiary)" }}>
+                    <MessageSquare
+                      className="mx-auto mb-3 h-10 w-10"
+                      style={{ color: "var(--text-muted)" }}
+                    />
+                    <p className="text-sm">Ask questions about this document</p>
+                    <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                      Click citations to jump to the relevant page
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((message) => (
+                    <NotebookMessageBubble
+                      key={message.id}
+                      message={message}
+                      onCitationClick={handleCitationClick}
+                    />
+                  ))
+                )}
+                <AnimatePresence>
+                  {activeHighlight && (
+                    <motion.div
+                      key="citation-highlight"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={transitionFast}
+                      className="flex items-start gap-2 rounded-md p-3 text-xs leading-relaxed"
+                      style={{
+                        background: "var(--accent-primary-soft)",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      <Highlighter
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                        style={{ color: "var(--accent-primary)" }}
+                      />
+                      <span className="min-w-0 break-words">
+                        Page{" "}
+                        <span className="data-num" style={{ color: "var(--accent-primary)" }}>
+                          {activeHighlight.page}
+                        </span>
+                        : {activeHighlight.text}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {chatError && <ErrorBanner message={chatError} />}
+                {isLoading && (
+                  <div className="flex justify-start">
+                    <div
+                      className="rounded-md p-3"
+                      style={{
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border)",
+                        borderLeft: "2px solid var(--border-hover)",
+                      }}
+                    >
+                      <StatusDot tone="processing" label="Thinking" pulse />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Input row: hairline rule, lime send action. */}
+              <div className="p-3 md:p-4" style={{ borderTop: "1px solid var(--border)" }}>
+                <form onSubmit={handleSendMessage} className="flex gap-2">
+                  <input
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    type="text"
+                    placeholder="Ask a question..."
+                    aria-label="Ask a question"
+                    className="min-w-0 flex-1 px-3 py-2 text-sm outline-none focus-ring"
+                    style={{
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius-md)",
+                      color: "var(--text-primary)",
+                    }}
+                    disabled={isLoading}
+                  />
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    aria-label="Send message"
+                    title="Send message"
+                    disabled={isLoading || !input.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              </div>
             </div>
           </motion.div>
         )}

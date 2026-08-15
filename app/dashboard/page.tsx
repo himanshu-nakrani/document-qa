@@ -54,17 +54,29 @@ function AppShell() {
   if (state.authLoading) {
     return (
       <div
-        className="flex min-h-screen items-center justify-center gap-3"
-        style={{ background: "var(--bg-primary)", color: "var(--text-muted)" }}
+        className="flex min-h-screen items-center justify-center"
+        style={{ background: "var(--bg-primary)" }}
       >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-          className="flex items-center gap-3"
+          transition={{ duration: 0.25 }}
+          className="flex items-center gap-3 px-6 py-5"
+          style={{
+            background: "var(--bg-secondary)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-xl)",
+            boxShadow: "var(--shadow-xs)",
+          }}
         >
-          <Loader2 size={16} className="animate-spin" />
-          <span className="text-sm">Loading</span>
+          <Loader2
+            size={16}
+            className="animate-spin"
+            style={{ color: "var(--accent-secondary)" }}
+          />
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            Loading
+          </span>
         </motion.div>
       </div>
     );
@@ -88,14 +100,16 @@ function AppShell() {
       onDrop={handleGlobalDrop}
     >
       {state.sidebarOpen && (
-        <motion.div
-          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+        <motion.button
+          type="button"
+          className="fixed inset-0 z-30 md:hidden cursor-default"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           onClick={() => dispatch({ type: "SET_SIDEBAR", payload: false })}
-          style={{ backdropFilter: "blur(4px)" }}
+          aria-label="Close sidebar"
+          style={{ background: "rgba(4, 6, 9, 0.55)" }}
         />
       )}
       <Sidebar onUploadClick={() => openUpload()} />

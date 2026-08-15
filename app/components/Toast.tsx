@@ -29,10 +29,10 @@ export function useToast() {
 }
 
 const VARIANT_META: Record<ToastVariant, { color: string; soft: string; icon: React.ReactNode }> = {
-  success: { color: "var(--confidence-high)", soft: "var(--confidence-high-soft)", icon: <CheckCircle2 size={14} /> },
-  error:   { color: "var(--confidence-low)",  soft: "var(--confidence-low-soft)",  icon: <AlertCircle size={14} /> },
-  warning: { color: "var(--confidence-med)",  soft: "var(--confidence-med-soft)",  icon: <AlertTriangle size={14} /> },
-  info:    { color: "var(--accent-brand)",    soft: "var(--accent-brand-soft)",    icon: <Info size={14} /> },
+  success: { color: "var(--success)", soft: "var(--success-soft)", icon: <CheckCircle2 size={14} /> },
+  error:   { color: "var(--error)",   soft: "var(--error-soft)",   icon: <AlertCircle size={14} /> },
+  warning: { color: "var(--warning)", soft: "var(--warning-soft)", icon: <AlertTriangle size={14} /> },
+  info:    { color: "var(--info)",    soft: "var(--info-soft)",    icon: <Info size={14} /> },
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {

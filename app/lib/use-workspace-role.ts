@@ -7,6 +7,15 @@ import { getMyWorkspaceRole, type ClientAuthContext, type WorkspaceRoleLiteral }
 const roleCache = new Map<string, { role: WorkspaceRoleLiteral; timestamp: number }>();
 const CACHE_TTL = 60000; // 1 minute cache
 
+/**
+ * Invalidate cached workspace roles. Call whenever the authenticated identity
+ * changes (login/logout) — cache keys don't include the user id, so roles
+ * from a previous identity must not survive the switch.
+ */
+export function clearRoleCache() {
+  roleCache.clear();
+}
+
 export function useWorkspaceRole(auth: ClientAuthContext, workspaceId: string | null) {
   const [role, setRole] = useState<WorkspaceRoleLiteral>(null);
   const [loading, setLoading] = useState(false);

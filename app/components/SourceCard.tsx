@@ -2,10 +2,12 @@
 
 import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, ChevronDown, CheckCircle2, AlertCircle, MinusCircle, FileText } from "lucide-react";
+import { BookOpen, ChevronDown, FileText } from "lucide-react";
 import type { Citation } from "../lib/api";
 import { EASE_OUT } from "../lib/motion";
 import { useServerState } from "../lib/server-state";
+import { Badge } from "./ui";
+import type { StatusTone } from "./ui";
 
 interface SourceCardProps {
   sources: Citation[];
@@ -15,6 +17,21 @@ interface SourceGroup {
   documentId: string;
   title: string;
   citations: Array<{ citation: Citation; globalIndex: number }>;
+}
+
+// Score tiers → Badge tones: Strong = success, Good = med confidence
+// (processing tone renders --accent-secondary, same color as --confidence-med),
+// Weak = warning. The 2px left rail carries the provenance color.
+type ScoreTier = { label: string; tone: StatusTone; rail: string };
+
+function getScoreTier(score: number): ScoreTier {
+  if (score >= 0.75) {
+    return { label: "Strong", tone: "success", rail: "var(--provenance-strong)" };
+  }
+  if (score >= 0.45) {
+    return { label: "Good", tone: "processing", rail: "var(--confidence-med)" };
+  }
+  return { label: "Weak", tone: "warning", rail: "var(--provenance-weak)" };
 }
 
 // ⚡ BOLT OPTIMIZATION:
@@ -45,40 +62,52 @@ const SourceCard = React.memo(function SourceCard({ sources }: SourceCardProps) 
 
   return (
     <motion.div
-      className="rounded-2xl overflow-hidden"
+      className="rounded-lg overflow-hidden"
       style={{
-        background: "var(--bg-surface)",
+        background: "var(--bg-secondary)",
         border: "1px solid var(--border)",
       }}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: EASE_OUT }}
+      transition={{ duration: 0.25, ease: EASE_OUT }}
     >
       {/* [a11y] Added aria-expanded to communicate toggle state to assistive technology */}
       <button
         type="button"
         onClick={() => setExpanded((current) => !current)}
         aria-expanded={expanded}
-        className="w-full flex items-center gap-2 px-4 py-2.5 transition-colors"
-        style={{ background: expanded ? "var(--bg-tertiary)" : "transparent" }}
+        className="w-full flex items-center gap-2.5 px-4 py-2.5 transition-colors hover:bg-[var(--bg-tertiary)]"
+        style={{ background: "transparent" }}
+        aria-label={`${sources.length} citations — ${expanded ? "collapse" : "expand"} details`}
       >
-        <BookOpen size={13} style={{ color: "var(--accent-brand)", flexShrink: 0 }} />
-        <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          {sources.length} citation{sources.length !== 1 ? "s" : ""}
-          {groups.length > 1 ? (
-            <span style={{ color: "var(--text-muted)" }}>
-              {" "}
-              · {groups.length} sources
-            </span>
-          ) : null}
-        </span>
-        <div className="flex-1" />
-        <motion.div
-          animate={{ rotate: expanded ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
+        <BookOpen size={13} style={{ color: "var(--accent-primary)", flexShrink: 0 }} />
+        <span
+          className="text-[10px] font-semibold uppercase tracking-widest"
+          style={{ color: "var(--text-tertiary)" }}
         >
-          <ChevronDown size={13} style={{ color: "var(--text-muted)" }} />
-        </motion.div>
+          Citations
+        </span>
+        <span className="data-num text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+          {sources.length}
+        </span>
+        {groups.length > 1 ? (
+          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+            · {groups.length} documents
+          </span>
+        ) : null}
+        <div className="flex-1" />
+        <span
+          className="flex items-center justify-center rounded-sm p-1 transition-colors"
+          style={{ color: "var(--text-muted)" }}
+          aria-hidden="true"
+        >
+          <motion.div
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <ChevronDown size={13} />
+          </motion.div>
+        </span>
       </button>
 
       <AnimatePresence>
@@ -98,88 +127,59 @@ const SourceCard = React.memo(function SourceCard({ sources }: SourceCardProps) 
                 const avgPct = Math.max(0, Math.min(100, Math.round(avg * 100)));
                 return (
                   <div key={group.documentId} className="flex flex-col gap-2 pt-3">
-                    <div className="flex items-center gap-2 text-[11px]">
-                      <FileText size={12} style={{ color: "var(--accent-brand)" }} />
+                    <div className="flex items-center gap-2 text-[11px] min-w-0">
+                      <FileText size={12} style={{ color: "var(--accent-primary)", flexShrink: 0 }} />
                       <span
-                        className="font-semibold truncate"
+                        className="font-medium truncate"
                         style={{ color: "var(--text-primary)" }}
                         title={group.title}
                       >
                         {group.title}
                       </span>
-                      <span style={{ color: "var(--text-muted)" }}>
-                        · {group.citations.length} excerpt
-                        {group.citations.length === 1 ? "" : "s"} · avg {avgPct}%
+                      <span className="data-num flex-shrink-0" style={{ color: "var(--text-muted)" }}>
+                        · {group.citations.length} {group.citations.length === 1 ? "excerpt" : "excerpts"} · avg{" "}
+                        {avgPct}%
                       </span>
                     </div>
                     {group.citations.map(({ citation, globalIndex }, index) => {
-                      const pct = Math.max(0, Math.min(100, Math.round(citation.score * 100)));
-                      const tier =
-                        citation.score >= 0.75
-                          ? {
-                              label: "Strong",
-                              icon: <CheckCircle2 size={10} />,
-                              color: "var(--provenance-strong)",
-                              bg: "var(--provenance-strong-soft)",
-                            }
-                          : citation.score >= 0.45
-                            ? {
-                                label: "Good",
-                                icon: <MinusCircle size={10} />,
-                                color: "var(--confidence-med)",
-                                bg: "var(--confidence-med-soft)",
-                              }
-                            : {
-                                label: "Weak",
-                                icon: <AlertCircle size={10} />,
-                                color: "var(--provenance-weak)",
-                                bg: "var(--provenance-weak-soft)",
-                              };
+                      const tier = getScoreTier(citation.score);
                       return (
                         <motion.div
                           key={citation.chunk_id}
-                          className="relative rounded-xl px-3 py-3 overflow-hidden"
+                          className="relative rounded-md px-3 py-2.5 overflow-hidden"
                           style={{
                             background: "var(--bg-tertiary)",
                             border: "1px solid var(--border)",
                           }}
                           initial={{ opacity: 0, x: -6 }}
                           animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.04, duration: 0.25 }}
+                          transition={{ delay: index * 0.04, duration: 0.25, ease: EASE_OUT }}
                           whileHover={{ borderColor: "var(--border-hover)" }}
                         >
+                          {/* Provenance left rail — tier-colored 2px edge */}
                           <div
-                            className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
-                            style={{ background: tier.color, opacity: 0.7 }}
+                            className="absolute left-0 top-0 bottom-0 w-[2px]"
+                            style={{ background: tier.rail, opacity: 0.85 }}
                             aria-hidden="true"
                           />
                           <div className="flex items-center gap-2 mb-1.5 text-[10px] flex-wrap">
                             <span
-                              className="px-1.5 py-0.5 rounded-md font-semibold"
-                              style={{
-                                background: "var(--accent-brand-soft)",
-                                color: "var(--accent-brand)",
-                              }}
+                              className="data-num font-medium"
+                              style={{ color: "var(--accent-primary)" }}
                             >
                               [{globalIndex}]
                             </span>
-                            <span
-                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md font-medium"
-                              style={{ background: tier.bg, color: tier.color }}
-                            >
-                              {tier.icon}
-                              {tier.label} · {pct}%
+                            <Badge tone={tier.tone}>{tier.label}</Badge>
+                            <span className="data-num" style={{ color: "var(--text-secondary)" }}>
+                              {citation.score.toFixed(2)}
                             </span>
                             {citation.page_number ? (
-                              <span
-                                className="uppercase tracking-widest"
-                                style={{ color: "var(--text-muted)" }}
-                              >
+                              <span className="data-num" style={{ color: "var(--text-tertiary)" }}>
                                 p.{citation.page_number}
                               </span>
                             ) : null}
                             <span
-                              className="uppercase tracking-widest truncate max-w-[120px]"
+                              className="data-num truncate max-w-[140px]"
                               style={{ color: "var(--text-muted)" }}
                               title={citation.chunk_id}
                             >

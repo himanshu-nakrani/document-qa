@@ -9,6 +9,7 @@ import React, {
   type ReactNode,
 } from "react";
 import { listWorkspaces, me, type AuthUser, type Provider, type Workspace } from "./api";
+import { clearRoleCache } from "./use-workspace-role";
 
 export interface AppSettings {
   provider: Provider;
@@ -21,7 +22,7 @@ export interface AppSettings {
   theme: "dark" | "light";
   highContrast: boolean;
   reducedMotion: boolean;
-  accentPack: "terracotta" | "emerald" | "amber";
+  accentPack: "lime" | "pulse" | "beam";
   chatLayout: "default" | "focus" | "research";
 }
 
@@ -113,7 +114,7 @@ function loadSettings(): AppSettings {
       theme: "dark",
       highContrast: false,
       reducedMotion: false,
-      accentPack: "terracotta",
+      accentPack: "lime",
       chatLayout: "default",
     };
   }
@@ -130,7 +131,7 @@ function loadSettings(): AppSettings {
   let theme: "dark" | "light" = "dark";
   let highContrast = false;
   let reducedMotion = false;
-  let accentPack: "terracotta" | "emerald" | "amber" = "terracotta";
+  let accentPack: "lime" | "pulse" | "beam" = "lime";
   let chatLayout: "default" | "focus" | "research" = "default";
 
   // Load theme from localStorage regardless of auth state (it's not sensitive)
@@ -141,7 +142,17 @@ function loadSettings(): AppSettings {
       if (parsed.theme === "light" || parsed.theme === "dark") theme = parsed.theme;
       if (typeof parsed.highContrast === "boolean") highContrast = parsed.highContrast;
       if (typeof parsed.reducedMotion === "boolean") reducedMotion = parsed.reducedMotion;
-      if (parsed.accentPack === "terracotta" || parsed.accentPack === "emerald" || parsed.accentPack === "amber") accentPack = parsed.accentPack;
+      // Signal pack names; legacy packs (terracotta/emerald/amber) migrate to
+      // their nearest Signal equivalent.
+      if (parsed.accentPack === "lime" || parsed.accentPack === "pulse" || parsed.accentPack === "beam") {
+        accentPack = parsed.accentPack;
+      } else if (parsed.accentPack === "emerald") {
+        accentPack = "pulse";
+      } else if (parsed.accentPack === "amber") {
+        accentPack = "beam";
+      } else if (parsed.accentPack === "terracotta") {
+        accentPack = "lime";
+      }
       if (parsed.chatLayout === "focus" || parsed.chatLayout === "research") chatLayout = parsed.chatLayout;
     }
   } catch {
@@ -212,8 +223,27 @@ function loadSettings(): AppSettings {
   };
 }
 
+// [FIX 6.5] Module-scope state uses static defaults only — no loadSettings()
+// side effect at import time (it reads/writes browser storage, which caused
+// SSR/CSR divergence). The provider's mount effect loads real settings, and
+// the pre-paint script in layout.tsx already applies the visual theme.
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  provider: "openai",
+  chatModel: DEFAULT_CHAT.openai,
+  embeddingModel: DEFAULT_EMBEDDING.openai,
+  providerApiKey: "",
+  clientSessionId: "",
+  topK: 5,
+  similarityThreshold: 0.0,
+  theme: "dark",
+  highContrast: false,
+  reducedMotion: false,
+  accentPack: "lime",
+  chatLayout: "default",
+};
+
 const initialState: AppState = {
-  settings: loadSettings(),
+  settings: DEFAULT_APP_SETTINGS,
   currentUser: null,
   authLoading: true,
   activeDocumentId: null,
@@ -364,7 +394,7 @@ function reducer(state: AppState, action: Action): AppState {
           }
         }
         if (action.payload.accentPack !== undefined) {
-          if (next.accentPack === "terracotta") {
+          if (next.accentPack === "lime") {
             document.documentElement.removeAttribute("data-accent");
           } else {
             document.documentElement.setAttribute("data-accent", next.accentPack);
@@ -384,8 +414,17 @@ function reducer(state: AppState, action: Action): AppState {
       persistSettings(next, Boolean(state.currentUser));
       return { ...state, settings: next };
     }
-    case "SET_CURRENT_USER":
+    case "SET_CURRENT_USER": {
+      // Identity changed: cached workspace roles belong to the previous
+      // identity and the cookie-session probe should re-run on next login.
+      clearRoleCache();
+      try {
+        sessionStorage.removeItem("rag-me-probed");
+      } catch {
+        // storage unavailable — nothing to reset
+      }
       return { ...state, currentUser: action.payload };
+    }
     case "SET_AUTH_LOADING":
       return { ...state, authLoading: action.payload };
     case "SET_ACTIVE_DOCUMENT":
@@ -513,8 +552,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const loadMe = async () => {
       if (!hasStoredAuthToken()) {
-        dispatch({ type: "SET_CURRENT_USER", payload: null });
-        dispatch({ type: "SET_AUTH_LOADING", payload: false });
+        // [FIX 6.2] Cookie-authenticated sessions have no Bearer token in
+        // sessionStorage, so probe /auth/me once per tab session — otherwise
+        // these users are silently treated as anonymous on every visit.
+        let probed = false;
+        try {
+          probed = sessionStorage.getItem("rag-me-probed") === "1";
+        } catch {
+          // storage unavailable — probe anyway
+        }
+        if (probed) {
+          dispatch({ type: "SET_CURRENT_USER", payload: null });
+          dispatch({ type: "SET_AUTH_LOADING", payload: false });
+          return;
+        }
+        try {
+          sessionStorage.setItem("rag-me-probed", "1");
+        } catch {
+          // ignore
+        }
+        dispatch({ type: "SET_AUTH_LOADING", payload: true });
+        try {
+          const user = await me();
+          if (!cancelled) {
+            dispatch({ type: "SET_CURRENT_USER", payload: user ?? null });
+          }
+        } catch {
+          if (!cancelled) {
+            dispatch({ type: "SET_CURRENT_USER", payload: null });
+          }
+        } finally {
+          if (!cancelled) {
+            dispatch({ type: "SET_AUTH_LOADING", payload: false });
+          }
+        }
         return;
       }
       dispatch({ type: "SET_AUTH_LOADING", payload: true });

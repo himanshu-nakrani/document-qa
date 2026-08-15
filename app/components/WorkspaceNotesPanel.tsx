@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Plus, StickyNote, Trash2, X } from "lucide-react";
 import {
   createArtifact,
@@ -13,7 +12,7 @@ import {
   type ClientAuthContext,
 } from "../lib/api";
 import { useWorkspaceRole } from "../lib/use-workspace-role";
-import { EASE_OUT } from "../lib/motion";
+import { Button, ConfirmDialog, EmptyState, ErrorBanner, Modal, TextField } from "./ui";
 
 interface WorkspaceNotesPanelProps {
   open: boolean;
@@ -140,9 +139,11 @@ export default function WorkspaceNotesPanel({
     }
   };
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const handleDelete = async () => {
     if (!selected) return;
-    if (!window.confirm(`Delete "${selected.title}"?`)) return;
+    setConfirmDelete(false);
     setBusy(true);
     setError(null);
     try {
@@ -158,265 +159,253 @@ export default function WorkspaceNotesPanel({
   };
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: EASE_OUT }}
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      busy={busy}
+      title="Workspace notes"
+      width={960}
+      height="min(680px, 88vh)"
+      align="top"
+    >
+      <div className="flex flex-col h-full min-h-0">
+        <header
+          className="flex items-center justify-between gap-3 px-5 py-3.5 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--border)" }}
         >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ duration: 0.2, ease: EASE_OUT }}
-            className="w-[min(960px,94vw)] h-[min(680px,86vh)] flex flex-col rounded-2xl overflow-hidden"
-            style={{
-              background: "var(--bg-primary)",
-              border: "1px solid var(--border)",
-              boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-            }}
-          >
-            <header
-              className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-              style={{ borderBottom: "1px solid var(--border)" }}
+          <div className="flex items-baseline gap-2.5 min-w-0">
+            <h2 className="display text-[15px] font-semibold truncate">Workspace notes</h2>
+            <span
+              className="text-[10px] uppercase tracking-widest truncate"
+              style={{ color: "var(--text-muted)" }}
             >
-              <div className="flex items-center gap-2">
-                <StickyNote size={14} style={{ color: "var(--accent-brand)" }} />
-                <h2 className="text-sm font-semibold">Notes &amp; saved answers</h2>
-                <span
-                  className="text-[10px] uppercase tracking-widest"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {workspaceName}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-lg"
-                style={{ color: "var(--text-muted)" }}
-                aria-label="Close notes panel"
-              >
-                <X size={14} />
-              </button>
-            </header>
+              {workspaceName}
+            </span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close notes panel">
+            <X size={14} />
+          </Button>
+        </header>
 
-            <div className="flex-1 min-h-0 flex">
-              {/* Left rail — tabs + list */}
-              <aside
-                className="w-64 flex-shrink-0 flex flex-col"
-                style={{ borderRight: "1px solid var(--border)" }}
+        <div className="flex-1 min-h-0 flex">
+          {/* Left rail — segmented type filter + artifact list */}
+          <aside
+            className="w-64 flex-shrink-0 flex flex-col"
+            style={{ borderRight: "1px solid var(--border)" }}
+          >
+            <div className="p-2.5 flex-shrink-0">
+              <div
+                role="tablist"
+                aria-label="Artifact type"
+                className="flex flex-wrap gap-1 p-1 rounded-lg"
+                style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
               >
-                <div
-                  className="flex flex-wrap gap-1 p-2 flex-shrink-0"
-                  style={{ borderBottom: "1px solid var(--border)" }}
-                >
-                  {TABS.map((tab) => {
-                    const active = tab.key === activeTab;
-                    return (
-                      <button
-                        key={tab.key}
-                        type="button"
-                        onClick={() => setActiveTab(tab.key)}
-                        className="text-[10px] px-2 py-0.5 rounded-md"
-                        style={{
-                          background: active ? "var(--accent-brand-soft)" : "transparent",
-                          color: active ? "var(--accent-brand)" : "var(--text-muted)",
-                          border: "1px solid var(--border)",
-                        }}
-                      >
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {canEdit ? (
-                  <div className="p-2 flex-shrink-0">
+                {TABS.map((tab) => {
+                  const active = tab.key === activeTab;
+                  return (
                     <button
+                      key={tab.key}
                       type="button"
-                      onClick={startCreate}
-                      className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setActiveTab(tab.key)}
+                      className="px-2 py-1 rounded-sm text-[10px] font-medium transition-colors focus-ring"
                       style={{
-                        background: "var(--accent-brand-soft)",
-                        color: "var(--accent-brand)",
-                        border: "1px solid var(--border)",
+                        background: active ? "var(--bg-elevated)" : "transparent",
+                        color: active ? "var(--accent-primary)" : "var(--text-tertiary)",
                       }}
                     >
-                      <Plus size={12} /> New note
+                      {tab.label}
                     </button>
-                  </div>
-                ) : null}
-                <div className="flex-1 overflow-y-auto">
-                  {loading && items.length === 0 ? (
-                    <div
-                      className="flex items-center gap-2 px-3 py-4 text-[11px]"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      <Loader2 size={11} className="animate-spin" /> Loading…
-                    </div>
-                  ) : null}
-                  {!loading && items.length === 0 ? (
-                    <div
-                      className="px-3 py-4 text-[11px]"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      No artifacts yet.
-                    </div>
-                  ) : null}
-                  <ul>
-                    {items.map((a) => {
-                      const active = a.id === selectedId;
-                      return (
-                        <li key={a.id}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedId(a.id)}
-                            className="w-full px-3 py-2 text-left flex flex-col gap-0.5"
-                            style={{
-                              background: active ? "var(--accent-brand-soft)" : "transparent",
-                              borderBottom: "1px solid var(--border)",
-                            }}
-                          >
-                            <span className="text-xs font-medium truncate">
-                              {a.title || "Untitled"}
-                            </span>
-                            <span
-                              className="text-[10px] uppercase tracking-widest"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              {TYPE_LABEL[a.artifact_type]}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  );
+                })}
+              </div>
+            </div>
+            {canEdit ? (
+              <div className="px-2.5 pb-2.5 flex-shrink-0">
+                <Button variant="secondary" size="sm" className="w-full" onClick={startCreate}>
+                  <Plus size={12} /> New note
+                </Button>
+              </div>
+            ) : null}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {loading && items.length === 0 ? (
+                <div
+                  className="flex items-center gap-2 px-3 py-4 text-[11px]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  <Loader2 size={11} className="animate-spin" /> Loading…
                 </div>
-              </aside>
-
-              {/* Right pane — editor */}
-              <section className="flex-1 min-w-0 flex flex-col">
-                {error ? (
-                  <div
-                    className="px-3 py-2 text-[11px] flex-shrink-0"
-                    style={{ background: "var(--error-soft)", color: "var(--error)" }}
-                  >
-                    {error}
-                  </div>
-                ) : null}
-                {creating || selected ? (
-                  <>
-                    <div className="p-4 flex-shrink-0 flex items-center gap-2">
-                      <input
-                        value={draftTitle}
-                        onChange={(e) => setDraftTitle(e.target.value)}
-                        placeholder="Title"
-                        aria-label="Note title"
-                        className="flex-1 bg-transparent text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] rounded-lg px-2 py-1.5"
+              ) : null}
+              {!loading && items.length === 0 ? (
+                <div
+                  className="px-3 py-4 text-[11px]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  No artifacts yet.
+                </div>
+              ) : null}
+              <ul>
+                {items.map((a) => {
+                  const active = a.id === selectedId;
+                  return (
+                    <li key={a.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(a.id)}
+                        className="w-full px-3 py-2 pl-2.5 text-left flex flex-col gap-0.5 transition-colors focus-ring"
                         style={{
-                          color: "var(--text-primary)",
-                          background: "var(--bg-surface)",
-                          border: "1px solid var(--border)",
+                          background: active ? "var(--bg-surface)" : "transparent",
+                          borderLeft: `2px solid ${
+                            active ? "var(--accent-primary)" : "transparent"
+                          }`,
+                          borderBottom: "1px solid var(--border)",
                         }}
-                      />
-                      {selected && canEdit ? (
-                        <button
-                          type="button"
-                          onClick={handleDelete}
+                      >
+                        <span className="text-xs font-medium truncate">
+                          {a.title || "Untitled"}
+                        </span>
+                        <span
+                          className="text-[10px] uppercase tracking-widest"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          {TYPE_LABEL[a.artifact_type]}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </aside>
+
+          {/* Right pane — editor / read-only viewer */}
+          <section className="flex-1 min-w-0 flex flex-col">
+            {error ? (
+              <div className="px-4 pt-3 flex-shrink-0">
+                <ErrorBanner message={error} />
+              </div>
+            ) : null}
+            {creating || selected ? (
+              <>
+                <div className="p-4 pb-3 flex-shrink-0">
+                  <TextField
+                    label="Title"
+                    placeholder="Untitled"
+                    aria-label="Note title"
+                    value={draftTitle}
+                    onChange={canEdit ? (e) => setDraftTitle(e.target.value) : undefined}
+                    readOnly={!canEdit}
+                  />
+                </div>
+                <textarea
+                  value={draftContent}
+                  onChange={canEdit ? (e) => setDraftContent(e.target.value) : undefined}
+                  readOnly={!canEdit}
+                  placeholder={canEdit ? "Write your note in markdown…" : "Read-only"}
+                  aria-label="Note content"
+                  className="flex-1 min-h-0 mx-4 mb-3 p-3 text-xs leading-relaxed resize-none outline-none focus-ring rounded-lg transition-colors"
+                  style={{
+                    background: "var(--bg-surface)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border)",
+                    fontFamily: "var(--font-mono), monospace",
+                  }}
+                />
+                <div
+                  className="flex items-center justify-between gap-3 px-4 py-3 flex-shrink-0"
+                  style={{ borderTop: "1px solid var(--border)" }}
+                >
+                  <span
+                    className="text-[11px] truncate"
+                    style={{ color: "var(--text-tertiary)" }}
+                  >
+                    {selected?.updated_at ? (
+                      <>
+                        Updated{" "}
+                        <span className="data-num">
+                          {new Date(selected.updated_at).toLocaleString()}
+                        </span>
+                      </>
+                    ) : creating ? (
+                      "Draft — not yet saved"
+                    ) : (
+                      ""
+                    )}
+                  </span>
+                  {canEdit ? (
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {selected ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setConfirmDelete(true)}
                           disabled={busy}
-                          className="p-2 rounded-lg"
                           style={{ color: "var(--error)" }}
                           title="Delete artifact"
                           aria-label="Delete note"
                         >
-                          <Trash2 size={13} />
-                        </button>
+                          <Trash2 size={12} /> Delete
+                        </Button>
                       ) : null}
-                    </div>
-                    <textarea
-                      value={draftContent}
-                      onChange={canEdit ? (e) => setDraftContent(e.target.value) : undefined}
-                      readOnly={!canEdit}
-                      placeholder={canEdit ? "Write your note in markdown…" : "Read-only"}
-                      aria-label="Note content"
-                      className="flex-1 min-h-0 mx-4 mb-3 p-3 text-xs leading-relaxed resize-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] rounded-lg"
-                      style={{
-                        background: "var(--bg-surface)",
-                        color: "var(--text-primary)",
-                        border: "1px solid var(--border)",
-                        fontFamily:
-                          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                      }}
-                    />
-                    <div
-                      className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-                      style={{ borderTop: "1px solid var(--border)" }}
-                    >
-                      <span
-                        className="text-[11px]"
-                        style={{ color: "var(--text-muted)" }}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setCreating(false);
+                          setSelectedId(null);
+                        }}
                       >
-                        {selected?.updated_at
-                          ? `Updated ${new Date(selected.updated_at).toLocaleString()}`
-                          : creating
-                            ? "Draft — not yet saved"
-                            : ""}
-                      </span>
-                      {canEdit ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCreating(false);
-                              setSelectedId(null);
-                            }}
-                            className="px-3 py-1.5 rounded-lg text-xs"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            Cancel
-                          </button>
-                          <motion.button
-                            type="button"
-                            onClick={() => void handleSave()}
-                            disabled={busy}
-                            whileTap={{ scale: 0.97 }}
-                            className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                            style={{
-                              background: busy ? "var(--bg-elevated)" : "var(--accent)",
-                              color: busy ? "var(--text-muted)" : "var(--accent-fg)",
-                            }}
-                          >
-                            {busy ? "Saving…" : creating ? "Create" : "Save"}
-                          </motion.button>
-                        </div>
-                      ) : (
-                        <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                          Read-only
-                        </span>
-                      )}
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => void handleSave()}
+                        disabled={busy}
+                      >
+                        {busy ? "Saving…" : creating ? "Create" : "Save"}
+                      </Button>
                     </div>
-                  </>
-                ) : (
-                  <div
-                    className="flex-1 flex items-center justify-center text-xs text-center px-8"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Select an artifact from the left, or create a new note to capture
-                    knowledge alongside this workspace&rsquo;s indexed sources.
-                  </div>
-                )}
-              </section>
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+                  ) : (
+                    <span
+                      className="text-[11px] flex-shrink-0"
+                      style={{ color: "var(--text-tertiary)" }}
+                    >
+                      Read-only
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <EmptyState
+                  icon={<StickyNote size={16} />}
+                  title="No artifact selected"
+                  description="Select an artifact from the left, or create a new note to capture knowledge alongside this workspace's indexed sources."
+                  action={
+                    canEdit ? (
+                      <Button variant="secondary" size="sm" onClick={startCreate}>
+                        <Plus size={12} /> New note
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete note"
+        message={selected ? `Delete "${selected.title}"? This cannot be undone.` : "Delete this artifact?"}
+        confirmLabel="Delete"
+        danger
+        busy={busy}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </Modal>
   );
 }

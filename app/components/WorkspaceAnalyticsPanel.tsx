@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart3,
   FileText,
@@ -19,7 +18,7 @@ import {
   type WorkspaceActivityItem,
   type WorkspaceAnalytics,
 } from "../lib/api";
-import { EASE_OUT } from "../lib/motion";
+import { Button, EmptyState, ErrorBanner, Modal } from "./ui";
 
 interface WorkspaceAnalyticsPanelProps {
   open: boolean;
@@ -29,8 +28,40 @@ interface WorkspaceAnalyticsPanelProps {
   auth: ClientAuthContext;
 }
 
-const TAB_CLASS =
-  "text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors";
+/**
+ * Module-level metric cache: breakdown bars only need the max count per
+ * breakdown, keyed weakly by the (stable between refreshes) items array so
+ * re-renders never recompute it and stale arrays get collected.
+ */
+const breakdownMaxCache = new WeakMap<
+  Array<{ type: string; count: number }>,
+  number
+>();
+
+function breakdownMax(items: Array<{ type: string; count: number }>): number {
+  const cached = breakdownMaxCache.get(items);
+  if (cached !== undefined) return cached;
+  const max = items.length ? Math.max(...items.map((i) => i.count)) : 0;
+  breakdownMaxCache.set(items, max);
+  return max;
+}
+
+/** Compact relative-time stamp for activity rows ("3m ago", "2h ago", …). */
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
 
 export default function WorkspaceAnalyticsPanel({
   open,
@@ -68,164 +99,166 @@ export default function WorkspaceAnalyticsPanel({
   }, [open, refresh]);
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: EASE_OUT }}
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Workspace analytics"
+      width={720}
+      height="min(640px, 86vh)"
+      align="top"
+    >
+      <div className="flex flex-col h-full min-h-0">
+        <header
+          className="flex items-center justify-between gap-3 px-5 py-3.5 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--border)" }}
         >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ duration: 0.2, ease: EASE_OUT }}
-            className="w-[min(720px,94vw)] h-[min(640px,86vh)] flex flex-col rounded-2xl overflow-hidden"
-            style={{
-              background: "var(--bg-primary)",
-              border: "1px solid var(--border)",
-              boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-            }}
-          >
-            <header
-              className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-              style={{ borderBottom: "1px solid var(--border)" }}
+          <div className="flex items-baseline gap-2.5 min-w-0">
+            <h2 className="display text-[15px] font-semibold truncate">Workspace analytics</h2>
+            <span
+              className="text-[10px] uppercase tracking-widest truncate"
+              style={{ color: "var(--text-muted)" }}
             >
-              <div className="flex items-center gap-2">
-                <BarChart3 size={14} style={{ color: "var(--accent-brand)" }} />
-                <h2 className="text-sm font-semibold">Workspace overview</h2>
-                <span
-                  className="text-[10px] uppercase tracking-widest"
-                  style={{ color: "var(--text-muted)" }}
+              {workspaceName}
+            </span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close analytics panel">
+            <X size={14} />
+          </Button>
+        </header>
+
+        <div
+          className="flex items-center gap-2 px-5 py-2.5 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <div
+            role="tablist"
+            aria-label="Analytics views"
+            className="inline-flex gap-1 p-1 rounded-lg"
+            style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
+          >
+            {(["analytics", "activity"] as const).map((key) => {
+              const active = tab === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(key)}
+                  className="px-3 py-1 rounded-sm text-[11px] font-medium capitalize transition-colors focus-ring"
+                  style={{
+                    background: active ? "var(--bg-elevated)" : "transparent",
+                    color: active ? "var(--accent-primary)" : "var(--text-tertiary)",
+                  }}
                 >
-                  {workspaceName}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-lg"
-                style={{ color: "var(--text-muted)" }}
-                aria-label="Close analytics panel"
-              >
-                <X size={14} />
-              </button>
-            </header>
+                  {key}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
-              <button
-                type="button"
-                onClick={() => setTab("analytics")}
-                className={TAB_CLASS}
-                style={{
-                  background: tab === "analytics" ? "var(--accent-brand-soft)" : "transparent",
-                  color: tab === "analytics" ? "var(--accent-brand)" : "var(--text-muted)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                Analytics
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("activity")}
-                className={TAB_CLASS}
-                style={{
-                  background: tab === "activity" ? "var(--accent-brand-soft)" : "transparent",
-                  color: tab === "activity" ? "var(--accent-brand)" : "var(--text-muted)",
-                  border: "1px solid var(--border)",
-                }}
-              >
-                Activity
-              </button>
+        {error ? (
+          <div className="px-4 pt-3 flex-shrink-0">
+            <ErrorBanner message={error} onRetry={() => void refresh()} />
+          </div>
+        ) : null}
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+          {loading && !analytics ? (
+            <div
+              className="flex items-center gap-2 text-[11px] px-1"
+              style={{ color: "var(--text-muted)" }}
+            >
+              <Loader2 size={11} className="animate-spin" /> Loading…
             </div>
-
-            {error ? (
-              <div
-                className="px-4 py-2 text-[11px] flex-shrink-0"
-                style={{ background: "var(--error-soft)", color: "var(--error)" }}
-              >
-                {error}
+          ) : tab === "analytics" && analytics ? (
+            <div className="flex flex-col gap-5">
+              <div className="grid grid-cols-3 gap-2">
+                <StatCard label="Sources" value={analytics.totals.sources} ready={analytics.totals.ready_sources} icon={<Globe size={12} />} />
+                <StatCard label="Artifacts" value={analytics.totals.artifacts} icon={<NotebookPen size={12} />} />
+                <StatCard label="Conversations" value={analytics.totals.conversations} icon={<MessageSquare size={12} />} />
+                <StatCard label="Messages" value={analytics.totals.messages} icon={<StickyNote size={12} />} />
+                <StatCard label="Messages (7d)" value={analytics.recent.messages_7d} icon={<MessageSquare size={12} />} />
+                <StatCard label="Artifacts (7d)" value={analytics.recent.artifacts_7d} icon={<NotebookPen size={12} />} />
               </div>
-            ) : null}
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-              {loading && !analytics ? (
-                <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  <Loader2 size={11} className="animate-spin" /> Loading…
-                </div>
-              ) : tab === "analytics" && analytics ? (
-                <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-3 gap-2">
-                    <StatCard label="Sources" value={analytics.totals.sources} ready={analytics.totals.ready_sources} icon={<Globe size={12} />} />
-                    <StatCard label="Artifacts" value={analytics.totals.artifacts} icon={<NotebookPen size={12} />} />
-                    <StatCard label="Conversations" value={analytics.totals.conversations} icon={<MessageSquare size={12} />} />
-                    <StatCard label="Messages" value={analytics.totals.messages} icon={<StickyNote size={12} />} />
-                    <StatCard label="Messages (7d)" value={analytics.recent.messages_7d} icon={<MessageSquare size={12} />} />
-                    <StatCard label="Artifacts (7d)" value={analytics.recent.artifacts_7d} icon={<NotebookPen size={12} />} />
-                  </div>
-
-                  <BreakdownSection
-                    title="Sources by type"
-                    items={analytics.breakdown.sources_by_type}
-                  />
-                  <BreakdownSection
-                    title="Artifacts by type"
-                    items={analytics.breakdown.artifacts_by_type}
-                  />
-                </div>
-              ) : tab === "activity" ? (
-                <ul className="flex flex-col gap-2">
-                  {activity.length === 0 && !loading ? (
-                    <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                      No recent activity.
-                    </div>
-                  ) : null}
-                  {activity.map((item) => (
-                    <li
-                      key={`${item.type}-${item.id}`}
-                      className="flex items-start gap-2 px-3 py-2 rounded-lg"
-                      style={{
-                        background: "var(--bg-surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
+              <BreakdownSection
+                title="Sources by type"
+                items={analytics.breakdown.sources_by_type}
+                barColor="var(--accent-secondary)"
+              />
+              <BreakdownSection
+                title="Artifacts by type"
+                items={analytics.breakdown.artifacts_by_type}
+                barColor="var(--accent-primary)"
+              />
+            </div>
+          ) : tab === "activity" ? (
+            activity.length === 0 && !loading ? (
+              <EmptyState
+                icon={<BarChart3 size={16} />}
+                title="No recent activity"
+                description="Workspace activity will appear here as sources, notes, and conversations change."
+              />
+            ) : (
+              <ul
+                className="flex flex-col rounded-lg overflow-hidden"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                {activity.map((item, index) => (
+                  <li
+                    key={`${item.type}-${item.id}`}
+                    className="flex items-start gap-2.5 px-3 py-2.5"
+                    style={{
+                      background: "var(--bg-surface)",
+                      borderBottom:
+                        index === activity.length - 1
+                          ? "none"
+                          : "1px solid var(--border)",
+                    }}
+                  >
+                    <span className="mt-0.5 flex-shrink-0">
                       <ActivityIcon type={item.type} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-medium truncate">
-                          {item.type === "message"
-                            ? `${item.role === "user" ? "Question" : "Answer"} in ${item.conversation_title || "Conversation"}`
-                            : item.type === "artifact"
-                              ? item.title
-                              : item.source_title}
-                        </div>
-                        <div className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
-                          {item.type === "message" && item.content_preview ? (
-                            <span className="truncate">{item.content_preview}</span>
-                          ) : item.type === "source_update" ? (
-                            <span className="uppercase tracking-wider">{item.status}</span>
-                          ) : item.type === "artifact" ? (
-                            <span className="uppercase tracking-wider">{item.artifact_type}</span>
-                          ) : null}
-                          {item.created_at ? (
-                            <span> · {new Date(item.created_at).toLocaleString()}</span>
-                          ) : null}
-                        </div>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate">
+                        {item.type === "message"
+                          ? `${item.role === "user" ? "Question" : "Answer"} in ${item.conversation_title || "Conversation"}`
+                          : item.type === "artifact"
+                            ? item.title
+                            : item.source_title}
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+                      <div
+                        className="text-[10px] truncate"
+                        style={{ color: "var(--text-tertiary)" }}
+                      >
+                        {item.type === "message" && item.content_preview ? (
+                          <span className="truncate">{item.content_preview}</span>
+                        ) : item.type === "source_update" ? (
+                          <span className="uppercase tracking-wider">{item.status}</span>
+                        ) : item.type === "artifact" ? (
+                          <span className="uppercase tracking-wider">{item.artifact_type}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    {item.created_at ? (
+                      <span
+                        className="data-num text-[10px] flex-shrink-0 mt-0.5"
+                        style={{ color: "var(--text-tertiary)" }}
+                        title={new Date(item.created_at).toLocaleString()}
+                      >
+                        {relativeTime(item.created_at)}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -242,17 +275,25 @@ function StatCard({
 }) {
   return (
     <div
-      className="flex flex-col gap-1 px-3 py-2 rounded-lg"
+      className="flex flex-col gap-1.5 px-3.5 py-3 rounded-lg"
       style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
     >
-      <div className="flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+      <div
+        className="flex items-center gap-1.5"
+        style={{ color: "var(--text-muted)" }}
+      >
         {icon}
-        <span className="text-[10px] uppercase tracking-widest">{label}</span>
+        <span className="text-[10px] uppercase tracking-widest font-medium">{label}</span>
       </div>
-      <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-        {value}
+      <div className="flex items-baseline gap-1.5 flex-wrap">
+        <span
+          className="data-num font-semibold leading-none"
+          style={{ color: "var(--text-primary)", fontSize: "1.5rem" }}
+        >
+          {value}
+        </span>
         {ready !== undefined ? (
-          <span className="text-[10px] font-normal ml-1" style={{ color: "var(--success, #10b981)" }}>
+          <span className="text-[10px] font-medium" style={{ color: "var(--success)" }}>
             {ready} ready
           </span>
         ) : null}
@@ -264,31 +305,49 @@ function StatCard({
 function BreakdownSection({
   title,
   items,
+  barColor,
 }: {
   title: string;
   items: Array<{ type: string; count: number }>;
+  barColor: string;
 }) {
   if (!items.length) return null;
-  const max = Math.max(...items.map((i) => i.count));
+  const max = breakdownMax(items);
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+      <h3
+        className="text-[10px] font-medium uppercase tracking-widest"
+        style={{ color: "var(--text-tertiary)" }}
+      >
         {title}
       </h3>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {items.map((item) => (
           <div key={item.type} className="flex items-center gap-2">
-            <span className="text-[10px] w-24 truncate capitalize">{item.type.replace(/_/g, " ")}</span>
-            <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--bg-surface)" }}>
+            <span
+              className="text-[10px] w-24 truncate capitalize"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {item.type.replace(/_/g, " ")}
+            </span>
+            <div
+              className="flex-1 h-1.5 rounded-full overflow-hidden"
+              style={{ background: "var(--bg-highest)" }}
+            >
               <div
-                className="h-full rounded-full"
+                className="h-full rounded-full transition-[width]"
                 style={{
                   width: `${max ? (item.count / max) * 100 : 0}%`,
-                  background: "var(--accent-brand)",
+                  background: barColor,
                 }}
               />
             </div>
-            <span className="text-[10px] w-6 text-right">{item.count}</span>
+            <span
+              className="data-num text-[10px] w-6 text-right"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {item.count}
+            </span>
           </div>
         ))}
       </div>
@@ -297,7 +356,7 @@ function BreakdownSection({
 }
 
 function ActivityIcon({ type }: { type: WorkspaceActivityItem["type"] }) {
-  const color = "var(--text-muted)";
+  const color = "var(--text-tertiary)";
   switch (type) {
     case "message":
       return <MessageSquare size={12} style={{ color }} />;

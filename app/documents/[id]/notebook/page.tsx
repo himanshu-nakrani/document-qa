@@ -1,25 +1,23 @@
-"use client";
+import type { Metadata } from "next";
 
-import { use } from "react";
-import { useRouter } from "next/navigation";
-import { NotebookView } from "../../../components/NotebookView";
-import { StoreProvider } from "../../../lib/store";
+import NotebookClient from "./NotebookClient";
 
 interface NotebookPageProps {
   params: Promise<{ id: string }>;
 }
 
-function NotebookPageContent({ documentId }: { documentId: string }) {
-  const router = useRouter();
-  return <NotebookView documentId={documentId} onClose={() => router.push("/dashboard")} />;
+export async function generateMetadata({ params }: NotebookPageProps): Promise<Metadata> {
+  const { id } = await params;
+  return {
+    title: "Notebook",
+    description: `Read and query document ${id} side by side in the Sourceful notebook.`,
+  };
 }
 
+/**
+ * Server shell for the notebook route: carries route metadata and mounts the
+ * client notebook viewer.
+ */
 export default function NotebookPage({ params }: NotebookPageProps) {
-  const { id } = use(params);
-
-  return (
-    <StoreProvider>
-      <NotebookPageContent documentId={id} />
-    </StoreProvider>
-  );
+  return <NotebookClient params={params} />;
 }
