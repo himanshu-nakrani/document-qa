@@ -4,27 +4,30 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  BookOpen,
+  Bug,
+  ChevronDown,
+  ChevronRight,
   FileText,
+  Focus,
+  KeyRound,
+  LayoutPanelLeft,
   Loader2,
-  MessageSquarePlus,
+  Monitor,
   PanelLeftOpen,
   RefreshCcw,
   Settings,
   StopCircle,
-  ArrowUp,
-  Bug,
-  ChevronDown,
-  ChevronRight,
-  BookOpen,
-  Focus,
-  LayoutPanelLeft,
-  Monitor,
-  BarChart3,
 } from "lucide-react";
 import TrustAnalyticsPanel from "./TrustAnalyticsPanel";
 import MessageBubble from "./MessageBubble";
 import SourceCard from "./SourceCard";
 import { MessageSkeleton } from "./Skeleton";
+import { Button, EmptyState, ErrorBanner, StatusDot } from "./ui";
 import {
   listWorkspaceSources,
   reprocessDocument,
@@ -45,11 +48,14 @@ import type { MessageFeedbackState } from "./MessageBubble";
 import { useServerState } from "../lib/server-state";
 import { useStore } from "../lib/store";
 import { useWorkspaceRole } from "../lib/use-workspace-role";
-import { EASE_OUT } from "../lib/motion";
+import { EASE_OUT, transitionFast } from "../lib/motion";
 
 interface ChatAreaProps {
   onUploadClick: () => void;
 }
+
+/** Distance from the bottom (px) within which auto-scroll stays engaged. */
+const STICKY_THRESHOLD_PX = 80;
 
 /**
  * Renders the document-aware chat interface, including message display, submission, streaming control,
@@ -67,13 +73,13 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
     documents,
     messages,
     messagesLoading,
+    messagesError,
     addMessage,
     appendToMessage,
     refreshConversations,
     selectConversation,
     updateMessageSources,
     updateMessageId,
-    setMessages,
   } = useServerState();
   const { settings, activeConversationId, activeDocumentId, activeDocumentIds, activeWorkspaceId, sidebarOpen } = state;
   const [chatMode, setChatMode] = useState<ChatMode>("ask");
@@ -100,6 +106,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
   const [streaming, setStreaming] = useState(false);
   const [currentSources, setCurrentSources] = useState<Citation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorRetry, setErrorRetry] = useState<null | (() => void)>(null);
   const [rerunningMessageId, setRerunningMessageId] = useState<string | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -112,9 +119,15 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // [FIX 5.2] generation counter — stream callbacks from superseded turns are dropped.
   const streamGenRef = useRef(0);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const stickToBottomRef = useRef(true);
+
+  // [FIX 5.7] Stick-to-bottom scrolling. ``stickyRef`` mirrors the user's
+  // scroll position without re-rendering; ``isSticky`` only drives the
+  // "jump to latest" affordance.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const stickyRef = useRef(true);
+  const [isSticky, setIsSticky] = useState(true);
 
   const auth = useMemo(
     () => ({
@@ -139,31 +152,34 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
   // Reload the workspace's source list whenever the active workspace changes.
   // The per-source filter is opt-in: by default we keep ``selectedSourceIds``
   // null so retrieval spans every ready source in the workspace.
+  const [workspaceSourcesError, setWorkspaceSourcesError] = useState<string | null>(null);
+
+  // [FIX 5.5] Deps now include the memoized `auth` object (so a key change
+  // re-fetches instead of reading stale credentials) and failures surface in
+  // the source filter instead of silently resolving to an empty list.
   useEffect(() => {
     let cancelled = false;
     if (!activeWorkspaceId) {
       setWorkspaceSources([]);
       setSelectedSourceIds(null);
+      setWorkspaceSourcesError(null);
       return;
     }
     void listWorkspaceSources(auth, activeWorkspaceId)
       .then((sources) => {
         if (cancelled) return;
         setWorkspaceSources(sources);
+        setWorkspaceSourcesError(null);
         // Drop any selections that no longer exist (source deleted, workspace
         // switched, etc.). Keep ``null`` if we had no explicit selection.
         setSelectedSourceIds((prev) =>
           prev ? prev.filter((id) => sources.find((s) => s.id === id)) : prev
         );
       })
-      .catch((loadError) => {
+      .catch((err) => {
         if (cancelled) return;
         setWorkspaceSources([]);
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Unable to load workspace sources."
-        );
+        setWorkspaceSourcesError(err instanceof Error ? err.message : "Failed to load sources.");
       });
     return () => {
       cancelled = true;
@@ -219,29 +235,42 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       !streaming
   );
 
+  // [FIX 5.7] Track whether the user is near the bottom of the transcript so
+  // streaming appends only auto-scroll while the view is already anchored to
+  // the latest content.
   useEffect(() => {
-    return () => {
-      streamGenRef.current += 1;
-      abortRef.current?.abort();
-    };
-  }, []);
-
-  useEffect(() => {
-    const element = messagesContainerRef.current;
+    const element = scrollContainerRef.current;
     if (!element) return;
-    const updateStickiness = () => {
-      const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-      stickToBottomRef.current = distanceFromBottom < 80;
+    const handleScroll = () => {
+      const nearBottom =
+        element.scrollHeight - element.scrollTop - element.clientHeight < STICKY_THRESHOLD_PX;
+      stickyRef.current = nearBottom;
+      setIsSticky(nearBottom);
     };
-    updateStickiness();
-    element.addEventListener("scroll", updateStickiness, { passive: true });
-    return () => element.removeEventListener("scroll", updateStickiness);
+    element.addEventListener("scroll", handleScroll, { passive: true });
+    return () => element.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // [FIX 5.7] Replace the unconditional smooth scroll with stick-to-bottom:
+  // instant jumps while tokens stream in, a smooth glide when a new user
+  // message starts a turn, and nothing at all when the user has scrolled up.
   useEffect(() => {
-    if (!stickToBottomRef.current) return;
-    endRef.current?.scrollIntoView({ behavior: "auto" });
-  }, [messages, currentSources]);
+    if (!stickyRef.current) return;
+    const last = messages[messages.length - 1];
+    const startingNewTurn = last?.role === "assistant" && !last.content;
+    const behavior: ScrollBehavior = streaming && !startingNewTurn ? "auto" : "smooth";
+    endRef.current?.scrollIntoView({ behavior });
+  }, [messages, currentSources, streaming]);
+
+  const jumpToLatest = useCallback(() => {
+    stickyRef.current = true;
+    setIsSticky(true);
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  // [FIX 5.3] Abort any in-flight stream on unmount so its callbacks can't
+  // keep mutating provider state after this screen is gone.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     const element = textareaRef.current;
@@ -250,30 +279,34 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
     element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
   }, [question]);
 
-  const handleSubmit = useCallback(
-    async (event?: React.FormEvent) => {
-      event?.preventDefault();
-      if (!canAsk || !activeDocumentId) return;
+  const sendPrompt = useCallback(
+    async (prompt: string) => {
+      if (!activeDocumentId || !prompt.trim() || streaming) return;
 
-      const prompt = question.trim();
-      setQuestion("");
       setError(null);
+      setErrorRetry(null);
       setCurrentSources([]);
       setLastHint(null);
       setStreaming(true);
 
-      stickToBottomRef.current = true;
-      endRef.current?.scrollIntoView({ behavior: "auto" });
+      // [FIX 5.2] Every send bumps a generation counter; stream callbacks
+      // drop events that don't belong to the current generation, and all
+      // mutations target this turn's assistant id — never "the last message".
+      const gen = ++streamGenRef.current;
+      const uid = () =>
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const assistantId = `temp-assistant-${uid()}`;
 
       const userMessage: Message = {
-        id: `temp-user-${crypto.randomUUID()}`,
+        id: `temp-user-${uid()}`,
         role: "user",
         content: prompt,
         created_at: new Date().toISOString(),
       };
-      const assistantClientId = `temp-assistant-${crypto.randomUUID()}`;
       const assistantMessage: Message = {
-        id: assistantClientId,
+        id: assistantId,
         role: "assistant",
         content: "",
         created_at: new Date().toISOString(),
@@ -283,18 +316,12 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       addMessage(assistantMessage);
 
       const controller = new AbortController();
-      abortRef.current?.abort();
       abortRef.current = controller;
-      const streamGen = ++streamGenRef.current;
-      let assistantMessageId = assistantClientId;
-      let receivedTokens = false;
-      const isCurrentStream = () => streamGenRef.current === streamGen;
       const startedAt = performance.now();
       setLastGrounding(null);
       setStreamEvents([{ at: 0, label: "request_sent" }]);
 
       const appendEvent = (label: string, detail?: string) => {
-        if (!isCurrentStream()) return;
         setStreamEvents((current) => [
           ...current,
           { at: performance.now() - startedAt, label, detail },
@@ -303,7 +330,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
 
       let activeConversation = activeConversationId;
       let streamError: Error | null = null;
-      let requestAborted = false;
+      let streamClean = false;
 
       try {
         await sendChatStream(
@@ -315,22 +342,21 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           activeConversationId,
           {
             onSources: (payload) => {
-              if (!isCurrentStream()) return;
+              if (gen !== streamGenRef.current) return;
               appendEvent("sources", `${payload.sources?.length ?? 0} chunks`);
               setCurrentSources(payload.sources);
               setLastStages(payload.stages ?? null);
               setLastHint((payload.stages?.active_learning_hint as ActiveLearningHint | undefined) ?? null);
-              updateMessageSources(assistantMessageId, payload.sources);
+              updateMessageSources(assistantId, payload.sources);
               activeConversation = payload.conversation_id;
               dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: payload.conversation_id });
             },
             onToken: (delta) => {
-              if (!isCurrentStream()) return;
-              receivedTokens = receivedTokens || Boolean(delta);
-              appendToMessage(assistantMessageId, delta);
+              if (gen !== streamGenRef.current) return;
+              appendToMessage(assistantId, delta);
             },
             onGrounding: (grounding) => {
-              if (!isCurrentStream()) return;
+              if (gen !== streamGenRef.current) return;
               appendEvent(
                 "grounding",
                 grounding.score !== null ? `score=${grounding.score.toFixed(2)}` : "unverified",
@@ -338,20 +364,17 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
               setLastGrounding(grounding);
             },
             onMessageSaved: (payload) => {
-              if (!isCurrentStream()) return;
+              if (gen !== streamGenRef.current) return;
               appendEvent("message_saved");
               if (payload?.message_id) {
-                updateMessageId(assistantMessageId, payload.message_id);
-                assistantMessageId = payload.message_id;
+                updateMessageId(assistantId, payload.message_id);
               }
             },
             onDone: () => {
-              if (!isCurrentStream()) return;
               appendEvent("done");
               setLastLatencyMs(performance.now() - startedAt);
             },
             onError: (payload) => {
-              if (!isCurrentStream()) return;
               appendEvent("server_error", payload.code);
               streamError = new Error(payload.error || "Chat failed");
             },
@@ -370,30 +393,32 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           },
         );
         if (streamError) throw streamError;
+        streamClean = true;
       } catch (err) {
+        // [FIX 5.1] Never slice off the streamed assistant turn — on abort we
+        // keep the partial answer as-is (streaming flips false in the finally
+        // block, marking it complete), and on real errors we keep the partial
+        // text and surface the ErrorBanner instead of deleting the turn.
         const aborted = err instanceof DOMException && err.name === "AbortError";
-        requestAborted = aborted;
-        if (!aborted && !receivedTokens) {
-          setMessages((current) => current.filter((message) => message.id !== assistantMessageId));
-        }
         if (!aborted) {
           setError(err instanceof Error ? err.message : "Request failed.");
+          setErrorRetry(() => () => {
+            void sendPrompt(prompt);
+          });
         }
       } finally {
-        const currentStream = isCurrentStream();
-        if (currentStream) {
-          setStreaming(false);
-          abortRef.current = null;
-        }
-        if (currentStream && activeConversation && !requestAborted) {
-          void refreshConversations(activeDocumentId).catch((refreshError) => {
-            console.error("refresh_conversations_failed", refreshError);
-            setError(
-              refreshError instanceof Error
-                ? refreshError.message
-                : "Unable to refresh conversations."
-            );
-          });
+        setStreaming(false);
+        abortRef.current = null;
+      }
+
+      // [FIX 5.1] The conversation refresh moved out of the stream's
+      // try/catch so a late refresh failure can no longer nuke the turn —
+      // it is logged and the answer stays on screen.
+      if (streamClean && activeConversation) {
+        try {
+          await refreshConversations(activeDocumentId);
+        } catch (refreshError) {
+          console.error("refresh_conversations_failed", refreshError);
         }
       }
     },
@@ -405,13 +430,11 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       addMessage,
       appendToMessage,
       auth,
-      canAsk,
       chatMode,
       selectedSourceIds,
       dispatch,
-      question,
       refreshConversations,
-      setMessages,
+      streaming,
       settings.chatModel,
       settings.provider,
       settings.topK,
@@ -421,8 +444,22 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
     ]
   );
 
+  const handleSubmit = useCallback(
+    (event?: React.FormEvent) => {
+      event?.preventDefault();
+      if (!canAsk || !activeDocumentId) return;
+      const prompt = question.trim();
+      setQuestion("");
+      void sendPrompt(prompt);
+    },
+    [canAsk, activeDocumentId, question, sendPrompt]
+  );
+
   const handleRerun = useCallback(
     async (message: Message) => {
+      // [FIX 5.6] Never offer/perform a rerun on an unreconciled client-side
+      // temp id — the backend has no such message and the call would 404.
+      if (message.id.startsWith("temp-")) return;
       if (
         streaming ||
         !activeDocumentId ||
@@ -433,6 +470,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         return;
       }
       setError(null);
+      setErrorRetry(null);
       setCurrentSources([]);
       setStreaming(true);
       setRerunningMessageId(message.id);
@@ -452,6 +490,9 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         await selectConversation(response.conversation_id);
       } catch (rerunError) {
         setError(rerunError instanceof Error ? rerunError.message : "Unable to rerun message.");
+        setErrorRetry(() => () => {
+          void handleRerun(message);
+        });
       } finally {
         setStreaming(false);
         setRerunningMessageId(null);
@@ -473,59 +514,95 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
     ]
   );
 
-  const handleRetryDocument = async () => {
+  const handleRetryDocument = useCallback(async () => {
     if (!activeDocumentId || !settings.providerApiKey.trim()) return;
     try {
       setError(null);
+      setErrorRetry(null);
       await reprocessDocument(auth, activeDocumentId, settings.embeddingModel);
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : "Unable to retry indexing.");
+      setErrorRetry(() => () => {
+        void handleRetryDocument();
+      });
     }
-  };
+  }, [activeDocumentId, auth, settings.providerApiKey, settings.embeddingModel]);
 
   const stopStreaming = () => {
-    streamGenRef.current += 1;
     abortRef.current?.abort();
-    abortRef.current = null;
     setStreaming(false);
   };
 
   const renderEmptyState = () => {
     if (!settings.providerApiKey.trim()) {
       return (
-        <StateCard
+        <EmptyState
+          icon={<KeyRound size={16} />}
           title="API Key Required"
           description="Add your OpenAI or Google AI API key in Settings to start chatting with your documents."
-          primaryLabel="Open Settings"
-          onPrimary={() => dispatch({ type: "SET_SETTINGS_OPEN", payload: true })}
+          action={
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => dispatch({ type: "SET_SETTINGS_OPEN", payload: true })}
+            >
+              Open Settings
+            </Button>
+          }
         />
       );
     }
 
     if (!activeDocument) {
       return (
-        <StateCard
+        <EmptyState
+          icon={<FileText size={16} />}
           title="Welcome to Document RAG"
           description="Upload a document, inspect the extracted chunks, and ask grounded questions with source citations."
-          primaryLabel="Upload Document"
-          onPrimary={onUploadClick}
-          secondaryLabel="Open Settings"
-          onSecondary={() => dispatch({ type: "SET_SETTINGS_OPEN", payload: true })}
+          action={
+            <div className="flex gap-2">
+              <Button variant="primary" size="sm" onClick={onUploadClick}>
+                Upload Document
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => dispatch({ type: "SET_SETTINGS_OPEN", payload: true })}
+              >
+                <Settings size={13} />
+                Open Settings
+              </Button>
+            </div>
+          }
         />
       );
     }
 
     if (activeDocument.status !== "ready") {
+      const failed = activeDocument.status === "error";
       return (
-        <StateCard
-          title={activeDocument.status === "error" ? "Indexing Failed" : "Indexing In Progress"}
+        <EmptyState
+          icon={
+            failed ? (
+              <AlertTriangle size={16} />
+            ) : (
+              <Loader2 size={16} className="animate-spin" />
+            )
+          }
+          title={failed ? "Indexing Failed" : "Indexing In Progress"}
           description={
-            activeDocument.status === "error"
+            failed
               ? activeDocument.last_error || "The document could not be indexed."
               : "The worker is preparing chunks and embeddings for this document."
           }
-          primaryLabel={activeDocument.status === "error" ? "Retry Indexing" : undefined}
-          onPrimary={activeDocument.status === "error" ? handleRetryDocument : undefined}
+          action={
+            failed ? (
+              <Button variant="primary" size="sm" onClick={handleRetryDocument}>
+                <RefreshCcw size={13} />
+                Retry Indexing
+              </Button>
+            ) : undefined
+          }
         />
       );
     }
@@ -535,25 +612,22 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         className="flex flex-col items-center justify-center py-20"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: EASE_OUT }}
+        transition={{ duration: 0.4, ease: EASE_OUT }}
       >
-        <motion.div
-          className="flex items-center justify-center rounded-2xl mb-5"
+        <div
+          className="flex items-center justify-center rounded-lg mb-5"
           style={{
-            width: 56,
-            height: 56,
-            background: "var(--gradient-accent-soft)",
-            border: "1px solid var(--border-hover)",
-            boxShadow: "var(--shadow-glow-teal)",
+            width: 52,
+            height: 52,
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border)",
           }}
-          animate={{ y: [0, -4, 0] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
-          <FileText size={24} style={{ color: "var(--accent-brand)" }} />
-        </motion.div>
+          <FileText size={22} style={{ color: "var(--accent-primary)" }} />
+        </div>
         <h3
-          className="text-lg font-semibold mb-1"
-          style={{ color: "var(--text-primary)", letterSpacing: "-0.02em" }}
+          className="display text-lg font-semibold mb-1"
+          style={{ color: "var(--text-primary)" }}
         >
           Ask about {activeDocument.filename}
         </h3>
@@ -569,7 +643,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                 setQuestion(suggestion);
                 textareaRef.current?.focus();
               }}
-              className="text-left px-4 py-3 rounded-xl text-sm group"
+              className="text-left px-4 py-3 rounded-lg text-sm transition-colors"
               style={{
                 background: "var(--bg-surface)",
                 border: "1px solid var(--border)",
@@ -577,13 +651,13 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
               }}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 + i * 0.05, duration: 0.4, ease: EASE_OUT }}
+              transition={{ delay: 0.1 + i * 0.05, duration: 0.25, ease: EASE_OUT }}
               whileHover={{
                 borderColor: "var(--border-hover)",
                 background: "var(--bg-surface-hover)",
               }}
             >
-              <span className="inline-block mr-1.5" style={{ color: "var(--accent-brand)" }}>→</span>
+              <span className="inline-block mr-1.5" style={{ color: "var(--accent-primary)" }}>→</span>
               {suggestion}
             </motion.button>
           ))}
@@ -595,11 +669,23 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
   const layoutMaxWidth =
     chatLayout === "focus" ? "max-w-4xl" : chatLayout === "research" ? "max-w-full" : "max-w-3xl";
 
+  const multiDocStatus = activeDocuments.some((d) => d.status === "error")
+    ? ("error" as const)
+    : activeDocuments.every((d) => d.status === "ready")
+      ? ("success" as const)
+      : ("processing" as const);
+  const singleDocStatus =
+    activeDocument?.status === "ready"
+      ? ("success" as const)
+      : activeDocument?.status === "error"
+        ? ("error" as const)
+        : ("processing" as const);
+
   return (
     <div className="flex-1 flex flex-col h-full w-full min-w-0">
-      {/* Header bar */}
+      {/* Header bar — hairline bottom border, ghost icon controls */}
       <div
-        className="flex items-center gap-3 px-4 flex-shrink-0 relative"
+        className="flex items-center gap-2 px-4 flex-shrink-0 relative"
         style={{
           height: "var(--header-height)",
           borderBottom: "1px solid var(--border)",
@@ -609,37 +695,58 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         <motion.button
           type="button"
           onClick={() => dispatch({ type: "TOGGLE_SIDEBAR" })}
-          className={`p-1.5 rounded-lg ${sidebarOpen ? 'md:hidden' : ''}`}
-          style={{ color: "var(--text-muted)" }}
+          className={`p-1.5 rounded-md transition-colors ${sidebarOpen ? 'md:hidden' : ''}`}
+          style={{ color: "var(--text-tertiary)" }}
           aria-label="Toggle sidebar"
           title="Toggle sidebar"
-          whileHover={{ color: "var(--text-secondary)" }}
+          whileHover={{ color: "var(--text-secondary)", background: "var(--bg-surface)" }}
           whileTap={{ scale: 0.92 }}
         >
           <PanelLeftOpen size={16} />
         </motion.button>
         {isMultiDoc ? (
           <div className="flex items-center gap-2 min-w-0">
-            <FileText size={14} style={{ color: "var(--accent-brand)", flexShrink: 0 }} />
-            <span className="text-sm font-medium truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
+            <StatusDot
+              tone={multiDocStatus}
+              pulse={multiDocStatus === "processing"}
+            />
+            <span
+              className="text-[13px] font-medium truncate"
+              style={{ color: "var(--text-primary)" }}
+            >
               {activeDocumentIds.length} documents
             </span>
             <span
-              className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: "var(--accent-brand-soft)", color: "var(--accent-brand)" }}
+              className="data-num flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border)",
+                color: "var(--text-tertiary)",
+              }}
             >
               {activeDocuments.reduce((sum, d) => sum + d.chunk_count, 0)} chunks
             </span>
           </div>
         ) : activeDocument ? (
           <div className="flex items-center gap-2 min-w-0">
-            <FileText size={14} style={{ color: "var(--accent-brand)", flexShrink: 0 }} />
-            <span className="text-sm font-medium truncate" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>
+            <StatusDot
+              tone={singleDocStatus}
+              pulse={singleDocStatus === "processing"}
+            />
+            <span
+              className="text-[13px] font-medium truncate"
+              style={{ color: "var(--text-primary)" }}
+              title={activeDocument.filename}
+            >
               {activeDocument.filename}
             </span>
             <span
-              className="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: "var(--accent-brand-soft)", color: "var(--accent-brand)" }}
+              className="data-num flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border)",
+                color: "var(--text-tertiary)",
+              }}
             >
               {activeDocument.chunk_count} chunks
             </span>
@@ -654,20 +761,25 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           <motion.button
             type="button"
             onClick={() => router.push(`/documents/${activeDocument.id}/notebook`)}
-            className="p-1.5 rounded-lg flex items-center gap-1.5 mr-2"
-            style={{ color: "var(--text-muted)" }}
+            className="p-1.5 rounded-md flex items-center gap-1.5 mr-1 transition-colors"
+            style={{ color: "var(--text-tertiary)" }}
             aria-label="Open notebook view"
             title="Open notebook view"
-            whileHover={{ color: "var(--text-secondary)" }}
+            whileHover={{ color: "var(--text-secondary)", background: "var(--bg-surface)" }}
             whileTap={{ scale: 0.92 }}
           >
             <BookOpen size={14} />
             <span className="text-[11px] font-medium hidden sm:inline">Notebook</span>
           </motion.button>
         )}
-        {/* Layout mode toggle */}
-        <div className="flex items-center rounded-lg overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--bg-surface)" }}>
-          {(["default", "focus", "research"] as const).map((mode) => {
+        {/* Layout mode toggle — segmented control with hairline dividers */}
+        <div
+          className="flex items-center rounded-md overflow-hidden mr-1"
+          style={{ border: "1px solid var(--border)", background: "var(--bg-secondary)" }}
+          role="group"
+          aria-label="Chat layout mode"
+        >
+          {(["default", "focus", "research"] as const).map((mode, index) => {
             const icons = { default: <Monitor size={12} />, focus: <Focus size={12} />, research: <LayoutPanelLeft size={12} /> };
             const titles = { default: "Default", focus: "Focus", research: "Research" };
             const active = chatLayout === mode;
@@ -687,15 +799,16 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                 aria-pressed={active}
                 aria-label={`${titles[mode]} layout`}
                 title={`${titles[mode]} layout`}
-                className="px-1.5 py-1.5 flex items-center gap-1 text-[10px] font-medium"
+                className="px-2 py-1.5 flex items-center gap-1 text-[10px] font-medium transition-colors"
                 style={{
-                  color: active ? "var(--accent-brand)" : "var(--text-muted)",
-                  background: active ? "var(--accent-brand-soft)" : "transparent",
+                  color: active ? "var(--text-primary)" : "var(--text-muted)",
+                  background: active ? "var(--bg-surface)" : "transparent",
+                  borderLeft: index > 0 ? "1px solid var(--border)" : "none",
                 }}
-                whileTap={{ scale: 0.9 }}
+                whileTap={{ scale: 0.95 }}
               >
                 {icons[mode]}
-                {active && <span>{titles[mode]}</span>}
+                {active ? <span>{titles[mode]}</span> : null}
               </motion.button>
             );
           })}
@@ -703,14 +816,15 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         <motion.button
           type="button"
           onClick={() => setAnalyticsOpen((v) => !v)}
-          className="p-1.5 rounded-lg flex items-center gap-1.5"
+          className="p-1.5 rounded-md flex items-center justify-center transition-colors"
           style={{
-            color: analyticsOpen ? "var(--accent-brand)" : "var(--text-muted)",
-            background: analyticsOpen ? "var(--accent-brand-soft)" : "transparent",
+            color: analyticsOpen ? "var(--accent-primary)" : "var(--text-tertiary)",
+            background: analyticsOpen ? "var(--accent-primary-soft)" : "transparent",
           }}
           aria-label="Toggle trust analytics panel"
+          aria-pressed={analyticsOpen}
           title="Trust analytics"
-          whileHover={{ color: "var(--text-secondary)" }}
+          whileHover={{ color: analyticsOpen ? "var(--accent-primary)" : "var(--text-secondary)" }}
           whileTap={{ scale: 0.92 }}
         >
           <BarChart3 size={14} />
@@ -718,14 +832,15 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         <motion.button
           type="button"
           onClick={() => setDebugOpen((v) => !v)}
-          className="p-1.5 rounded-lg flex items-center gap-1.5"
+          className="p-1.5 rounded-md flex items-center gap-1.5 transition-colors"
           style={{
-            color: debugOpen ? "var(--accent-brand)" : "var(--text-muted)",
-            background: debugOpen ? "var(--accent-brand-soft)" : "transparent",
+            color: debugOpen ? "var(--accent-secondary)" : "var(--text-tertiary)",
+            background: debugOpen ? "var(--accent-secondary-soft)" : "transparent",
           }}
           aria-label="Toggle retrieval debug panel"
+          aria-pressed={debugOpen}
           title="Retrieval debug panel"
-          whileHover={{ color: "var(--text-secondary)" }}
+          whileHover={{ color: debugOpen ? "var(--accent-secondary)" : "var(--text-secondary)" }}
           whileTap={{ scale: 0.92 }}
         >
           <Bug size={14} />
@@ -735,7 +850,8 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           <motion.button
             type="button"
             onClick={handleRetryDocument}
-            style={{ color: "var(--text-muted)" }}
+            className="p-1.5 rounded-md flex items-center justify-center transition-colors"
+            style={{ color: "var(--text-tertiary)" }}
             aria-label="Retry processing document"
             title="Retry processing document"
             whileHover={{ rotate: 180, color: "var(--text-secondary)" }}
@@ -762,130 +878,174 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         streamEvents={streamEvents}
       />
 
-      {/* Messages area */}
-      <div
-        ref={messagesContainerRef}
-        className={`flex-1 overflow-y-auto py-6 ${chatLayout === "focus" ? "px-6" : "px-4"}`}
-        style={{ background: "var(--bg-primary)" }}
-      >
-        <div className={`${layoutMaxWidth} mx-auto flex flex-col gap-4`}>
-          {chatLayout === "research" && (() => {
-            const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-            const stickySources = streaming && currentSources.length
-              ? currentSources
-              : latestAssistant?.sources ?? [];
-            if (!stickySources.length) return null;
-            return (
-              <div
-                className="sticky top-0 z-10 -mx-4 px-4 py-2"
-                style={{
-                  background: "var(--bg-primary)",
-                  borderBottom: "1px solid var(--border)",
-                  backdropFilter: "blur(8px)",
-                }}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className="text-[10px] font-semibold uppercase tracking-widest"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    Active sources · {stickySources.length}
-                  </span>
-                </div>
-                <SourceCard sources={stickySources} />
-              </div>
-            );
-          })()}
-          {messages.length === 0 && messagesLoading ? (
-            <>
-              <MessageSkeleton />
-              <MessageSkeleton />
-            </>
-          ) : messages.length === 0 ? (
-            renderEmptyState()
-          ) : (
-            <>
-              {messages.map((message, idx) => (
-                <React.Fragment key={message.id}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: idx * 0.02, ease: EASE_OUT }}
-                  >
-                    {/* TODO: expose persisted user-message ids in the streaming SSE payload,
-                        then reconcile temp user ids and re-enable Rerun for same-session sends. */}
-                    <MessageBubble
-                      message={message}
-                      onRerun={
-                        message.role === "user" &&
-                        activeConversationId &&
-                        !message.id.startsWith("temp-")
-                          ? handleRerun
-                          : undefined
-                      }
-                      rerunDisabled={streaming || rerunningMessageId === message.id}
-                      isStreaming={
-                        streaming &&
-                        message.role === "assistant" &&
-                        idx === messages.length - 1
-                      }
-                      onFeedback={
-                        message.role === "assistant" && activeConversationId
-                          ? handleFeedback
-                          : undefined
-                      }
-                      feedbackState={feedbackState[message.id] ?? "idle"}
-                    />
-                  </motion.div>
-                  {message.role === "assistant" && message.sources?.length ? (
-                    <SourceCard sources={message.sources} />
-                  ) : null}
-                  {message.role === "assistant" && message.id && !message.id.startsWith("temp-") && activeWorkspaceId && canEdit ? (
-                    <button
-                      type="button"
-                      onClick={() => handleSaveToWorkspace(message)}
-                      disabled={savingMessageId === message.id}
-                      className="self-start text-[11px] px-2 py-1 rounded-md transition-colors"
-                      style={{
-                        background: "var(--accent-brand-soft)",
-                        color: "var(--accent-brand)",
-                        border: "1px solid var(--border)",
-                        opacity: savingMessageId === message.id ? 0.6 : 1,
-                      }}
-                      title="Save this answer to the workspace as a saved_answer artifact"
+      {/* Messages area — scroll container with stick-to-bottom tracking */}
+      <div className="flex-1 relative min-h-0">
+        <div
+          ref={scrollContainerRef}
+          className={`absolute inset-0 overflow-y-auto py-6 ${chatLayout === "focus" ? "px-6" : "px-4"}`}
+          style={{ background: "var(--bg-primary)" }}
+        >
+          <div className={`${layoutMaxWidth} mx-auto flex flex-col gap-4`}>
+            {chatLayout === "research" && (() => {
+              const latestAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+              const stickySources = streaming && currentSources.length
+                ? currentSources
+                : latestAssistant?.sources ?? [];
+              if (!stickySources.length) return null;
+              return (
+                <div
+                  className="sticky top-0 z-10 -mx-4 px-4 py-2"
+                  style={{
+                    background: "var(--bg-primary)",
+                    borderBottom: "1px solid var(--border)",
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-widest"
+                      style={{ color: "var(--text-tertiary)" }}
                     >
-                      {savingMessageId === message.id ? "Saving…" : "Save to workspace"}
-                    </button>
-                  ) : null}
-                </React.Fragment>
-              ))}
-              {streaming && currentSources.length ? <SourceCard sources={currentSources} /> : null}
-              {!streaming && lastHint ? (
-                <ActiveLearningHintBanner hint={lastHint} />
-              ) : null}
-              {messagesLoading ? (
-                <div className="flex items-center gap-2 pl-11" style={{ color: "var(--text-muted)" }}>
-                  <Loader2 size={12} className="animate-spin" />
-                  <span className="text-xs">Loading conversation…</span>
+                      Active sources ·{" "}
+                      <span className="data-num">{stickySources.length}</span>
+                    </span>
+                  </div>
+                  <SourceCard sources={stickySources} />
                 </div>
-              ) : null}
-            </>
-          )}
-          <div ref={endRef} />
+              );
+            })()}
+            {messagesError ? (
+              <div className="px-4 py-6">
+                <ErrorBanner
+                  message={`Couldn't load this conversation: ${messagesError}`}
+                  onRetry={activeConversationId ? () => void selectConversation(activeConversationId) : undefined}
+                />
+              </div>
+            ) : messages.length === 0 && messagesLoading ? (
+              <>
+                <MessageSkeleton />
+                <MessageSkeleton />
+              </>
+            ) : messages.length === 0 ? (
+              renderEmptyState()
+            ) : (
+              <>
+                {messages.map((message, idx) => (
+                  <React.Fragment key={message.id}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: idx * 0.02, ease: EASE_OUT }}
+                    >
+                      <MessageBubble
+                        message={message}
+                        onRerun={
+                          // [FIX 5.6] no rerun on unreconciled temp ids or without a durable conversation
+                          message.role === "user" &&
+                          activeConversationId &&
+                          !message.id.startsWith("temp-")
+                            ? handleRerun
+                            : undefined
+                        }
+                        rerunDisabled={streaming || rerunningMessageId === message.id}
+                        isStreaming={
+                          streaming &&
+                          message.role === "assistant" &&
+                          idx === messages.length - 1
+                        }
+                        onFeedback={
+                          message.role === "assistant" && activeConversationId
+                            ? handleFeedback
+                            : undefined
+                        }
+                        feedbackState={feedbackState[message.id] ?? "idle"}
+                      />
+                    </motion.div>
+                    {message.role === "assistant" && message.sources?.length ? (
+                      <SourceCard sources={message.sources} />
+                    ) : null}
+                    {message.role === "assistant" && message.id && !message.id.startsWith("temp-") && activeWorkspaceId && canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveToWorkspace(message)}
+                        disabled={savingMessageId === message.id}
+                        className="self-start text-[11px] px-2 py-1 rounded-md transition-colors"
+                        style={{
+                          background: "var(--bg-surface)",
+                          color: "var(--text-tertiary)",
+                          border: "1px solid var(--border)",
+                          opacity: savingMessageId === message.id ? 0.6 : 1,
+                        }}
+                        title="Save this answer to the workspace as a saved_answer artifact"
+                      >
+                        {savingMessageId === message.id ? "Saving…" : "Save to workspace"}
+                      </button>
+                    ) : null}
+                  </React.Fragment>
+                ))}
+                {streaming && currentSources.length ? <SourceCard sources={currentSources} /> : null}
+                {!streaming && lastHint ? (
+                  <ActiveLearningHintBanner hint={lastHint} />
+                ) : null}
+                {messagesLoading ? (
+                  <div className="flex items-center gap-2 pl-11" style={{ color: "var(--text-muted)" }}>
+                    <Loader2 size={12} className="animate-spin" />
+                    <span className="text-xs">Loading conversation…</span>
+                  </div>
+                ) : null}
+              </>
+            )}
+            <div ref={endRef} />
+          </div>
         </div>
+
+        {/* [FIX 5.7] Jump-to-latest affordance while detached from the bottom */}
+        <AnimatePresence>
+          {!isSticky && messages.length > 0 ? (
+            <div className="absolute bottom-4 inset-x-0 z-20 flex justify-center pointer-events-none">
+              <motion.button
+                type="button"
+                onClick={jumpToLatest}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={transitionFast}
+                className="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-colors focus-ring"
+                style={{
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--border-hover)",
+                  color: "var(--text-secondary)",
+                  boxShadow: "var(--shadow-md)",
+                }}
+                aria-label="Jump to latest message"
+                title="Jump to latest message"
+              >
+                <ArrowDown size={12} />
+                Jump to latest
+              </motion.button>
+            </div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       {/* Error bar */}
       <AnimatePresence>
         {error ? (
           <motion.div
+            className="px-4 pb-2"
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
-            className="mx-4 mb-2 px-3 py-2 rounded-xl text-sm"
-            style={{ background: "var(--error-soft)", color: "var(--error)" }}
+            transition={transitionFast}
           >
-            {error}
+            <ErrorBanner
+              message={error}
+              onRetry={errorRetry ?? undefined}
+              onDismiss={() => {
+                setError(null);
+                setErrorRetry(null);
+              }}
+            />
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -894,72 +1054,88 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       {activeDocument?.status === "ready" ? (
         <div className="flex-shrink-0 px-4 pb-4 pt-2" style={{ background: "var(--bg-primary)" }}>
           <form onSubmit={handleSubmit} className={`${layoutMaxWidth} mx-auto relative`}>
-            <div className="flex items-center gap-1 mb-1.5 flex-wrap relative">
-              <span className="text-[10px] uppercase tracking-widest mr-1" style={{ color: "var(--text-muted)" }}>
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+              <span
+                className="text-[10px] uppercase tracking-widest mr-1"
+                style={{ color: "var(--text-muted)" }}
+              >
                 Mode
               </span>
-              {(["ask", "compare", "extract", "brief"] as const).map((mode) => {
-                const active = chatMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setChatMode(mode)}
-                    aria-pressed={active}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-md transition-colors"
-                    style={{
-                      background: active ? "var(--accent-brand-soft)" : "transparent",
-                      color: active ? "var(--accent-brand)" : "var(--text-muted)",
-                      border: "1px solid var(--border)",
-                    }}
-                    title={
-                      mode === "ask"
-                        ? "Grounded Q&A (default)"
-                        : mode === "compare"
+              {/* Mode selector — segmented control */}
+              <div
+                className="flex items-center rounded-md overflow-hidden"
+                style={{ border: "1px solid var(--border)", background: "var(--bg-secondary)" }}
+                role="group"
+                aria-label="Chat mode"
+              >
+                {(["ask", "compare", "extract", "brief"] as const).map((mode, index) => {
+                  const active = chatMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setChatMode(mode)}
+                      aria-pressed={active}
+                      className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider transition-colors"
+                      style={{
+                        background: active ? "var(--bg-surface)" : "transparent",
+                        color: active ? "var(--text-primary)" : "var(--text-muted)",
+                        borderLeft: index > 0 ? "1px solid var(--border)" : "none",
+                      }}
+                      title={
+                        mode === "ask"
+                          ? "Grounded Q&A (default)"
+                          : mode === "compare"
                           ? "Compare similarities/differences across sources"
                           : mode === "extract"
                             ? "Normalized field extraction with citations"
                             : "Executive brief / study guide"
-                    }
-                  >
-                    {mode}
-                  </button>
-                );
-              })}
+                      }
+                    >
+                      {mode}
+                    </button>
+                  );
+                })}
+              </div>
 
               {/* Per-source filter (Phase 1). Hidden when not inside a workspace
                   or when the workspace has fewer than 2 ready sources. */}
-              {activeWorkspaceId && workspaceSources.length >= 2 ? (
-                <div className="ml-2 relative">
+              {activeWorkspaceId && workspaceSourcesError ? (
+                <span
+                  className="ml-1 text-[10px] px-2 py-1 rounded-md"
+                  style={{ color: "var(--error)", border: "1px solid var(--error-soft)" }}
+                  role="alert"
+                  title={workspaceSourcesError}
+                >
+                  source filter unavailable
+                </span>
+              ) : activeWorkspaceId && workspaceSources.length >= 2 ? (
+                <div className="ml-1 relative">
                   <button
                     type="button"
                     onClick={() => setSourceFilterOpen((v) => !v)}
                     aria-haspopup="listbox"
                     aria-expanded={sourceFilterOpen}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-md transition-colors flex items-center gap-1"
+                    className="text-[10px] font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1"
                     style={{
-                      background: selectedSourceIds
-                        ? "var(--accent-brand-soft)"
-                        : "transparent",
-                      color: selectedSourceIds
-                        ? "var(--accent-brand)"
-                        : "var(--text-muted)",
+                      background: selectedSourceIds ? "var(--accent-primary-soft)" : "transparent",
+                      color: selectedSourceIds ? "var(--accent-primary)" : "var(--text-muted)",
                       border: "1px solid var(--border)",
                     }}
                     title="Restrict retrieval to selected workspace sources"
                   >
                     Sources:{" "}
-                    {selectedSourceIds
-                      ? `${selectedSourceIds.length} selected`
-                      : "all"}
+                    <span className="data-num">
+                      {selectedSourceIds ? selectedSourceIds.length : "all"}
+                    </span>
                   </button>
                   {sourceFilterOpen ? (
                     <div
-                      className="absolute bottom-full mb-1 left-0 z-30 w-72 rounded-xl overflow-hidden"
+                      className="absolute bottom-full mb-1 left-0 z-30 w-72 rounded-lg overflow-hidden"
                       style={{
-                        background: "var(--bg-secondary)",
+                        background: "var(--bg-elevated)",
                         border: "1px solid var(--border)",
-                        boxShadow: "0 12px 24px rgba(0,0,0,0.3)",
+                        boxShadow: "var(--shadow-md)",
                       }}
                       role="listbox"
                     >
@@ -979,8 +1155,8 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                             setSelectedSourceIds(null);
                             setSourceFilterOpen(false);
                           }}
-                          className="text-[10px]"
-                          style={{ color: "var(--accent-brand)" }}
+                          className="text-[10px] font-medium focus-ring rounded px-1"
+                          style={{ color: "var(--accent-primary)" }}
                         >
                           Reset to all
                         </button>
@@ -994,7 +1170,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                           return (
                             <li key={src.id}>
                               <label
-                                className="w-full flex items-center gap-2 px-3 py-2 text-xs cursor-pointer"
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs cursor-pointer transition-colors hover:bg-[var(--bg-surface)]"
                                 style={{
                                   color: isReady
                                     ? "var(--text-primary)"
@@ -1006,6 +1182,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                                   type="checkbox"
                                   checked={checked}
                                   disabled={!isReady}
+                                  style={{ accentColor: "var(--accent-primary)" }}
                                   onChange={(e) => {
                                     setSelectedSourceIds((prev) => {
                                       const base = prev ?? [];
@@ -1039,9 +1216,9 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                 </div>
               ) : null}
             </div>
-            <motion.div
-              className="flex items-end rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--bg-secondary)] transition-[border-color,box-shadow,opacity] duration-200 focus-within:border-[var(--border-hover)] focus-within:shadow-[0_0_0_3px_rgba(99,102,241,0.06)]"
-              style={{ opacity: streaming ? 0.6 : 1 }}
+            <div
+              className="flex items-end rounded-lg overflow-hidden border border-[var(--border)] bg-[var(--bg-surface)] transition-[border-color,box-shadow,opacity] duration-150 focus-within:border-[var(--border-hover)] focus-within:shadow-[0_0_0_3px_var(--accent-soft)]"
+              style={{ opacity: streaming ? 0.7 : 1 }}
             >
               <textarea
                 ref={textareaRef}
@@ -1063,42 +1240,50 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                 disabled={!settings.providerApiKey.trim() || streaming}
                 rows={1}
                 aria-label="Ask a question about your document"
-                className="flex-1 resize-none bg-transparent px-4 py-3.5 text-sm outline-none rounded-2xl focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] disabled:cursor-not-allowed"
+                className="flex-1 resize-none bg-transparent px-4 py-3 text-sm outline-none rounded-lg disabled:cursor-not-allowed"
                 style={{ color: "var(--text-primary)", maxHeight: 160, minHeight: 44 }}
               />
-              <div className="flex items-center gap-1 p-1.5">
+              <div className="flex items-center gap-1.5 p-1.5">
                 {streaming ? (
                   <motion.button
                     type="button"
                     onClick={stopStreaming}
-                    className="flex items-center justify-center p-2 rounded-xl"
-                    style={{ color: "var(--warning)" }}
+                    className="flex items-center justify-center rounded-md transition-colors focus-ring"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      background: "var(--error-soft)",
+                      color: "var(--error)",
+                      border: "1px solid var(--error-soft)",
+                    }}
                     aria-label="Stop generating response"
                     title="Stop generating response"
+                    whileHover={{ filter: "brightness(1.15)" }}
                     whileTap={{ scale: 0.9 }}
                   >
-                    <StopCircle size={18} />
+                    <StopCircle size={16} />
                   </motion.button>
                 ) : null}
                 <motion.button
                   type="submit"
                   disabled={!canAsk}
-                  className="flex items-center justify-center p-2 rounded-xl"
+                  className="flex items-center justify-center rounded-md transition-colors focus-ring disabled:cursor-not-allowed"
                   style={{
-                    background: canAsk ? "var(--gradient-accent)" : "transparent",
-                    color: canAsk ? "#fff" : "var(--text-muted)",
-                    boxShadow: canAsk ? "var(--shadow-glow-teal)" : "none",
+                    width: 32,
+                    height: 32,
+                    background: canAsk ? "var(--accent)" : "transparent",
+                    color: canAsk ? "var(--accent-fg)" : "var(--text-muted)",
+                    border: canAsk ? "1px solid transparent" : "1px solid var(--border)",
                   }}
                   aria-label="Send message"
                   title="Send message"
-                  whileHover={canAsk ? { scale: 1.05 } : {}}
+                  whileHover={canAsk ? { background: "var(--accent-hover)" } : {}}
                   whileTap={canAsk ? { scale: 0.92 } : {}}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
                 >
-                  {streaming ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />}
+                  {streaming ? <Loader2 size={15} className="animate-spin" /> : <ArrowUp size={15} />}
                 </motion.button>
               </div>
-            </motion.div>
+            </div>
             <p className="text-center mt-2 text-[10px]" style={{ color: "var(--text-muted)" }}>
               Sources include chunk IDs, scores, and page references.
             </p>
@@ -1136,6 +1321,7 @@ function RetrievalDebugPanel({
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.2, ease: EASE_OUT }}
+          className="panel-grid"
           style={{
             borderBottom: "1px solid var(--border)",
             background: "var(--bg-secondary)",
@@ -1145,7 +1331,10 @@ function RetrievalDebugPanel({
         >
           <div className="px-4 py-3 max-w-3xl mx-auto flex flex-col gap-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
+              <span
+                className="text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--text-tertiary)" }}
+              >
                 Retrieval
               </span>
               <StageChip label="top_k" value={stages?.requested_top_k ?? topK} />
@@ -1210,7 +1399,7 @@ function RetrievalDebugPanel({
                   style={{ color: "var(--text-tertiary)" }}
                 >
                   {eventsExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  Stream timeline ({streamEvents.length} events)
+                  Stream timeline (<span className="data-num">{streamEvents.length}</span> events)
                 </button>
                 {eventsExpanded ? (
                   <div className="mt-2 flex flex-col gap-1">
@@ -1218,16 +1407,21 @@ function RetrievalDebugPanel({
                       <div
                         key={`${ev.label}-${i}`}
                         className="flex items-center gap-2 text-[11px]"
-                        style={{ fontFamily: "var(--font-mono, monospace)" }}
                       >
-                        <span style={{ color: "var(--text-muted)", minWidth: 60 }}>
+                        <span
+                          className="data-num"
+                          style={{ color: "var(--accent-secondary)", minWidth: 64 }}
+                        >
                           {ev.at.toFixed(0)} ms
                         </span>
-                        <span style={{ color: "var(--accent-brand)", minWidth: 120 }}>
+                        <span
+                          className="data-num"
+                          style={{ color: "var(--text-secondary)", minWidth: 120 }}
+                        >
                           {ev.label}
                         </span>
                         {ev.detail ? (
-                          <span style={{ color: "var(--text-secondary)" }}>{ev.detail}</span>
+                          <span style={{ color: "var(--text-tertiary)" }}>{ev.detail}</span>
                         ) : null}
                       </div>
                     ))}
@@ -1247,33 +1441,35 @@ function RetrievalDebugPanel({
                   style={{ color: "var(--text-tertiary)" }}
                 >
                   {sourcesExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  Top {sources.length} chunks
+                  Top <span className="data-num">{sources.length}</span> chunks
                 </button>
                 {sourcesExpanded ? (
                   <div className="mt-2 flex flex-col gap-1.5">
                     {sources.map((source, index) => (
                       <div
                         key={source.chunk_id}
-                        className="px-2.5 py-1.5 rounded-lg text-[11px] flex gap-2"
+                        className="px-2.5 py-1.5 rounded-md text-[11px] flex gap-2 items-baseline"
                         style={{
                           background: "var(--bg-surface)",
                           border: "1px solid var(--border)",
                         }}
                       >
-                        <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono, monospace)" }}>
+                        <span className="data-num" style={{ color: "var(--text-muted)" }}>
                           [{index + 1}]
                         </span>
                         <span
+                          className="data-num"
                           style={{
-                            color: "var(--accent-brand)",
-                            fontFamily: "var(--font-mono, monospace)",
+                            color: "var(--accent-secondary)",
                             minWidth: 54,
                           }}
                         >
                           {source.score.toFixed(4)}
                         </span>
                         {source.page_number !== null && source.page_number !== undefined ? (
-                          <span style={{ color: "var(--text-muted)" }}>p{source.page_number}</span>
+                          <span className="data-num" style={{ color: "var(--text-muted)" }}>
+                            p{source.page_number}
+                          </span>
                         ) : null}
                         <span
                           className="truncate flex-1"
@@ -1299,6 +1495,10 @@ function RetrievalDebugPanel({
   );
 }
 
+/**
+ * Instrument chip for retrieval-stage readouts: muted uppercase label with a
+ * cyan mono data-num value — the data, not decoration, is the signal.
+ */
 function StageChip({
   label,
   value,
@@ -1310,101 +1510,23 @@ function StageChip({
 }) {
   return (
     <span
-      className="px-2 py-0.5 rounded-md text-[10px] flex items-center gap-1"
+      className="px-2 py-0.5 rounded-md text-[10px] flex items-baseline gap-1.5"
       style={{
-        background: accent ? "var(--accent-brand-soft)" : "var(--bg-surface)",
-        color: accent ? "var(--accent-brand)" : "var(--text-secondary)",
-        border: "1px solid var(--border)",
-        fontFamily: "var(--font-mono, monospace)",
+        background: "var(--bg-surface)",
+        color: "var(--text-secondary)",
+        border: `1px solid ${accent ? "var(--border-hover)" : "var(--border)"}`,
       }}
     >
-      <span style={{ color: "var(--text-muted)" }}>{label}</span>
-      <span>{String(value)}</span>
+      <span
+        className="uppercase tracking-widest"
+        style={{ color: "var(--text-muted)", fontSize: 9 }}
+      >
+        {label}
+      </span>
+      <span className="data-num" style={{ color: "var(--accent-secondary)" }}>
+        {String(value)}
+      </span>
     </span>
-  );
-}
-
-function StateCard({
-  title,
-  description,
-  primaryLabel,
-  onPrimary,
-  secondaryLabel,
-  onSecondary,
-}: {
-  title: string;
-  description: string;
-  primaryLabel?: string;
-  onPrimary?: () => void;
-  secondaryLabel?: string;
-  onSecondary?: () => void;
-}) {
-  return (
-    <motion.div
-      className="flex flex-col items-center justify-center py-20"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: EASE_OUT }}
-    >
-      <motion.div
-        className="flex items-center justify-center rounded-2xl mb-5"
-        style={{
-          width: 56,
-          height: 56,
-          background: "var(--accent-brand-soft)",
-          border: "1px solid var(--border)",
-        }}
-        animate={{ y: [0, -4, 0] }}
-        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <MessageSquarePlus size={24} style={{ color: "var(--accent-brand)" }} />
-      </motion.div>
-      <h3
-        className="text-lg font-semibold mb-2"
-        style={{ color: "var(--text-primary)", letterSpacing: "-0.02em" }}
-      >
-        {title}
-      </h3>
-      <p className="text-sm text-center max-w-md mb-6" style={{ color: "var(--text-tertiary)" }}>
-        {description}
-      </p>
-      <div className="flex gap-3">
-        {primaryLabel && onPrimary ? (
-          <motion.button
-            type="button"
-            onClick={onPrimary}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
-            style={{
-              background: "var(--gradient-accent)",
-              color: "#fff",
-              boxShadow: "var(--shadow-glow-teal)",
-            }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            transition={{ type: "spring", stiffness: 400, damping: 17 }}
-          >
-            {primaryLabel}
-          </motion.button>
-        ) : null}
-        {secondaryLabel && onSecondary ? (
-          <motion.button
-            type="button"
-            onClick={onSecondary}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium"
-            style={{
-              background: "var(--bg-surface)",
-              color: "var(--text-secondary)",
-              border: "1px solid var(--border)",
-            }}
-            whileHover={{ borderColor: "var(--border-hover)" }}
-            whileTap={{ scale: 0.97 }}
-          >
-            <Settings size={14} />
-            {secondaryLabel}
-          </motion.button>
-        ) : null}
-      </div>
-    </motion.div>
   );
 }
 
@@ -1422,25 +1544,31 @@ function ActiveLearningHintBanner({ hint }: { hint: ActiveLearningHint }) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: EASE_OUT }}
-      className="mx-auto w-full rounded-xl px-3 py-2 text-xs flex items-start gap-2"
+      className="mx-auto w-full rounded-lg px-3 py-2 text-xs flex items-start gap-2"
       style={{
-        background: "var(--accent-brand-soft)",
-        color: "var(--accent-brand)",
+        background: "var(--info-soft)",
         border: "1px solid var(--border)",
+        color: "var(--info)",
       }}
       role="note"
       aria-label="Retrieval suggestion"
     >
-      <Focus size={12} style={{ marginTop: 2 }} />
+      <Focus size={12} style={{ marginTop: 2, flexShrink: 0 }} />
       <div className="flex-1 leading-snug">
-        <div style={{ fontWeight: 500 }}>{hint.suggestion}</div>
-        <div style={{ color: "var(--text-muted)" }}>
+        <div style={{ fontWeight: 500, color: "var(--info)" }}>{hint.suggestion}</div>
+        <div style={{ color: "var(--text-tertiary)" }}>
           {isExpand
             ? "Try adding another document to the conversation or rephrasing with more specific terms."
             : "The agent could not ground an answer in your documents — consider rephrasing or trying a different source."}
-          {typeof hint.best_score === "number"
-            ? ` (best score: ${hint.best_score.toFixed(2)})`
-            : ""}
+          {typeof hint.best_score === "number" ? (
+            <>
+              {" (best score: "}
+              <span className="data-num">{hint.best_score.toFixed(2)}</span>
+              {")"}
+            </>
+          ) : (
+            ""
+          )}
         </div>
       </div>
     </motion.div>

@@ -8,6 +8,8 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { motion } from "framer-motion";
 import { Bot, Check, Copy, RefreshCcw, ThumbsDown, ThumbsUp, User, Scale, FileText, ListTree } from "lucide-react";
 import type { Citation, Message } from "../lib/api";
+import { CitationPreview } from "./CitationPreview";
+import { Meter } from "./ui";
 
 export type MessageFeedbackState = "idle" | "up" | "down" | "pending" | "error";
 
@@ -39,7 +41,7 @@ interface MessageBubbleProps {
 }
 
 // Match inline citation markers like [1], [ 2 ], or ranges like [1,3,5].
-// We replace them with hoverable pill badges that reveal the underlying
+// We replace them with hoverable superscript chips that reveal the underlying
 // excerpt and page reference.
 const CITATION_RE = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
 
@@ -61,7 +63,7 @@ function renderWithInlineCitations(text: string, sources: Citation[]): React.Rea
     );
     lastIndex = start + match[0].length;
   }
-  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex, text.length));
   return nodes;
 }
 
@@ -89,28 +91,75 @@ function CitationPills({
         const oneIdx = raw - 1;
         const source = sources[oneIdx] ?? sources[raw] ?? null;
         const label = raw;
-        const title = source
-          ? `[${label}] ${source.page_number ? `p${source.page_number} · ` : ""}${source.excerpt}`
-          : `[${label}] (source not found)`;
+        if (!source) {
+          return (
+            <span
+              key={`${label}-${idx}`}
+              className="data-num inline-flex items-center mx-[2px] px-1 text-[10px] leading-none"
+              style={{
+                borderRadius: "var(--radius-xs)",
+                color: "var(--text-muted)",
+                border: "1px solid var(--border)",
+                verticalAlign: "super",
+                lineHeight: 1.4,
+              }}
+            >
+              [{label}]
+            </span>
+          );
+        }
         return (
-          <span
-            key={`${label}-${idx}`}
-            title={title}
-            className="inline-flex items-center align-baseline text-[11px] font-semibold mx-0.5 px-2 py-0.5 rounded-full cursor-help transition-colors"
-            style={{
-              background: source ? "var(--accent-brand-soft)" : "var(--bg-surface)",
-              color: source ? "var(--accent-brand)" : "var(--text-muted)",
-              border: `1px solid ${source ? "var(--accent-brand)" : "var(--border)"}`,
-              cursor: source ? "help" : "default",
-              verticalAlign: "baseline",
-              lineHeight: 1.4,
-            }}
-          >
-            {label}
-          </span>
+          <CitationPreview key={`${label}-${idx}`} citation={source}>
+            <span
+              tabIndex={0}
+              aria-label={`Source ${label}${source.page_number ? `, page ${source.page_number}` : ""}`}
+              className="data-num inline-flex items-center mx-[2px] px-1 text-[10px] leading-none transition-colors focus-ring"
+              style={{
+                borderRadius: "var(--radius-xs)",
+                background: "var(--accent-primary-soft)",
+                color: "var(--accent-primary)",
+                border: "1px solid var(--accent-primary-soft)",
+                cursor: "help",
+                verticalAlign: "super",
+                lineHeight: 1.4,
+              }}
+            >
+              [{label}]
+            </span>
+          </CitationPreview>
         );
       })}
     </>
+  );
+}
+
+/**
+ * Compact provenance summary rendered above the answer when the assistant
+ * message carries retrieved sources: count, score range (mono data-num),
+ * and a compact confidence meter of the average retrieval score.
+ */
+function ProvenanceSummary({ sources }: { sources: Citation[] }) {
+  const scores = sources.map((s) => s.score).filter((n) => Number.isFinite(n));
+  if (!scores.length) return null;
+  const lo = Math.min(...scores);
+  const hi = Math.max(...scores);
+  const avg = scores.reduce((sum, n) => sum + n, 0) / scores.length;
+  return (
+    <div
+      className="flex items-center gap-2.5 flex-wrap mb-2.5 pb-2"
+      style={{ borderBottom: "1px solid var(--border)" }}
+    >
+      <span
+        className="text-[10px] uppercase tracking-widest"
+        style={{ color: "var(--text-tertiary)" }}
+      >
+        Evidence
+      </span>
+      <span className="data-num text-[11px]" style={{ color: "var(--text-secondary)" }}>
+        {sources.length} {sources.length === 1 ? "source" : "sources"} · {lo.toFixed(2)}–{hi.toFixed(2)}
+      </span>
+      <Meter value={avg} compact label="avg" showValue />
+    </div>
   );
 }
 
@@ -135,24 +184,20 @@ const MessageBubble = React.memo(function MessageBubble({
   const mode = message.mode;
   const modeBadge = !isUser && mode && mode !== "ask" ? (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded mb-1"
+      className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest px-1.5 py-0.5 rounded-sm mb-1.5"
       style={{
         background:
           mode === "compare"
-            ? "var(--accent-warning-soft, rgba(234,179,8,0.12))"
+            ? "var(--warning-soft)"
             : mode === "extract"
-              ? "var(--accent-success-soft, rgba(34,197,94,0.12))"
-              : mode === "brief"
-                ? "var(--accent-brand-soft)"
-                : "var(--bg-surface)",
+              ? "var(--success-soft)"
+              : "var(--accent-secondary-soft)",
         color:
           mode === "compare"
-            ? "var(--accent-warning, #ca8a04)"
+            ? "var(--warning)"
             : mode === "extract"
-              ? "var(--accent-success, #16a34a)"
-              : mode === "brief"
-                ? "var(--accent-brand)"
-                : "var(--text-muted)",
+              ? "var(--success)"
+              : "var(--accent-secondary)",
         border: "1px solid var(--border)",
       }}
     >
@@ -171,15 +216,15 @@ const MessageBubble = React.memo(function MessageBubble({
       style={{ justifyContent: isUser ? "flex-end" : "flex-start", maxWidth: "100%" }}
     >
       {!isUser ? (
-        <div className="flex-shrink-0 flex items-start pt-1">
+        <div className="flex-shrink-0 flex items-start pt-0.5">
           <div
-            className="flex items-center justify-center rounded-xl"
+            className="flex items-center justify-center"
             style={{
-              width: 30,
-              height: 30,
-              background: "var(--gradient-accent-soft)",
-              border: "1px solid var(--border-hover)",
-              boxShadow: "var(--shadow-glow-teal)",
+              width: 28,
+              height: 28,
+              borderRadius: "var(--radius-md)",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border)",
             }}
           >
             <Bot size={14} style={{ color: "var(--accent-primary)" }} />
@@ -188,20 +233,23 @@ const MessageBubble = React.memo(function MessageBubble({
       ) : null}
 
       <div
-        className={`rounded-2xl px-4 py-3${
+        className={`${
           !isUser && message.sources?.length && !isStreaming
-            ? " " + getConfidenceRailClass(message.sources)
+            ? getConfidenceRailClass(message.sources)
             : ""
         }`}
         title={!isUser && !isStreaming ? getConfidenceTooltip(message.sources) : undefined}
         style={{
           maxWidth: isUser ? "75%" : "85%",
-          background: isUser ? "var(--gradient-accent)" : "var(--bg-surface)",
-          border: isUser ? "none" : "1px solid var(--border)",
-          color: isUser ? "#fff" : "var(--text-primary)",
-          borderTopRightRadius: isUser ? 6 : undefined,
-          borderTopLeftRadius: !isUser ? 6 : undefined,
-          boxShadow: isUser ? "var(--shadow-glow-teal)" : undefined,
+          // User turns are compact hairline surface cards; assistant turns sit
+          // borderless on the canvas with only the confidence rail as edge.
+          // NOTE: no inline `border` on assistant turns — an inline shorthand
+          // would override the confidence-rail class's border-left.
+          background: isUser ? "var(--bg-surface)" : "transparent",
+          border: isUser ? "1px solid var(--border)" : undefined,
+          borderRadius: isUser ? "var(--radius-lg)" : "var(--radius-xs)",
+          padding: isUser ? "10px 14px" : "4px 6px 4px 12px",
+          color: "var(--text-primary)",
         }}
       >
         {isUser ? (
@@ -214,12 +262,15 @@ const MessageBubble = React.memo(function MessageBubble({
                   onClick={() => onRerun(message)}
                   disabled={rerunDisabled}
                   aria-label="Rerun this message"
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
+                  title="Rerun this message"
+                  className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] transition-colors"
                   style={{
-                    background: "rgba(9, 9, 11, 0.16)",
-                    color: "var(--accent-fg)",
+                    background: "transparent",
+                    color: "var(--text-tertiary)",
+                    border: "1px solid var(--border)",
                     opacity: rerunDisabled ? 0.55 : 1,
                   }}
+                  whileHover={{ borderColor: "var(--border-hover)", color: "var(--text-secondary)" }}
                   whileTap={{ scale: 0.92 }}
                 >
                   <RefreshCcw size={10} />
@@ -231,9 +282,10 @@ const MessageBubble = React.memo(function MessageBubble({
         ) : (
           <div
             className="markdown-body"
-            style={isBrief ? { borderLeft: "3px solid var(--accent-brand)", paddingLeft: 12, marginLeft: -4 } : undefined}
+            style={isBrief ? { borderLeft: "2px solid var(--accent-secondary)", paddingLeft: 12, marginLeft: -4 } : undefined}
           >
             {modeBadge}
+            {message.sources?.length ? <ProvenanceSummary sources={message.sources} /> : null}
             {!message.content ? (
               isStreaming ? (
                 <TypingIndicator />
@@ -294,13 +346,14 @@ const MessageBubble = React.memo(function MessageBubble({
       </div>
 
       {isUser ? (
-        <div className="flex-shrink-0 flex items-start pt-1">
+        <div className="flex-shrink-0 flex items-start pt-0.5">
           <div
-            className="flex items-center justify-center rounded-xl"
+            className="flex items-center justify-center"
             style={{
-              width: 30,
-              height: 30,
-              background: "var(--bg-surface)",
+              width: 28,
+              height: 28,
+              borderRadius: "var(--radius-md)",
+              background: "var(--bg-secondary)",
               border: "1px solid var(--border)",
             }}
           >
@@ -329,28 +382,35 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   return (
     <div className="relative group" style={{ margin: "0.75rem 0" }}>
       <div
-        className="flex items-center justify-between px-3 py-1.5 rounded-t-xl"
+        className="flex items-center justify-between px-3 py-1.5"
         style={{
-          background: "var(--bg-elevated)",
+          background: "var(--bg-secondary)",
           borderBottom: "1px solid var(--border)",
-          fontSize: "0.65rem",
-          color: "var(--text-muted)",
-          fontFamily: "var(--font-mono)",
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
+          borderTopLeftRadius: "var(--radius-md)",
+          borderTopRightRadius: "var(--radius-md)",
         }}
       >
-        <span>{language}</span>
+        <span
+          className="data-num uppercase"
+          style={{ fontSize: 10, letterSpacing: "0.08em", color: "var(--text-tertiary)" }}
+        >
+          {language}
+        </span>
         {/* [a11y] Added aria-label — icon-only button needs accessible name */}
         <motion.button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1 transition-colors"
-          style={{ color: copied ? "var(--success)" : "var(--text-muted)" }}
+          className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium transition-colors focus-ring"
+          style={{
+            color: copied ? "var(--success)" : "var(--text-muted)",
+            background: "transparent",
+            border: "1px solid var(--border)",
+          }}
           aria-label={copied ? "Code copied" : "Copy code to clipboard"}
+          title={copied ? "Code copied" : "Copy code to clipboard"}
           whileTap={{ scale: 0.9 }}
         >
-          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? <Check size={10} /> : <Copy size={10} />}
           {copied ? "Copied" : "Copy"}
         </motion.button>
       </div>
@@ -399,7 +459,7 @@ function FeedbackControls({
     <div
       className="flex items-center gap-2 pt-3 mt-3"
       style={{
-        borderTop: "1px dashed var(--border)",
+        borderTop: "1px solid var(--border)",
         color: "var(--text-muted)",
       }}
     >
@@ -407,13 +467,14 @@ function FeedbackControls({
       <motion.button
         type="button"
         aria-label="Thumbs up"
+        title="Thumbs up"
         disabled={pending || recorded}
         onClick={() => onFeedback(message, "up")}
         whileTap={{ scale: 0.9 }}
-        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px]"
+        className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] transition-colors"
         style={{
-          background: up ? "var(--accent-brand-soft)" : "transparent",
-          color: up ? "var(--accent-brand)" : "var(--text-muted)",
+          background: up ? "var(--success-soft)" : "transparent",
+          color: up ? "var(--success)" : "var(--text-muted)",
           border: "1px solid var(--border)",
           cursor: pending || recorded ? "default" : "pointer",
           opacity: pending ? 0.6 : 1,
@@ -424,10 +485,11 @@ function FeedbackControls({
       <motion.button
         type="button"
         aria-label="Thumbs down"
+        title="Thumbs down"
         disabled={pending || recorded}
         onClick={() => onFeedback(message, "down")}
         whileTap={{ scale: 0.9 }}
-        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px]"
+        className="inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] transition-colors"
         style={{
           background: down ? "var(--error-soft)" : "transparent",
           color: down ? "var(--error)" : "var(--text-muted)",
@@ -450,7 +512,7 @@ function TypingIndicator() {
         <motion.div
           key={i}
           className="w-1.5 h-1.5 rounded-full"
-          style={{ background: "var(--accent-brand)" }}
+          style={{ background: "var(--accent-secondary)" }}
           animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
           transition={{ duration: 1, repeat: Infinity, delay, ease: "easeInOut" }}
         />

@@ -5,6 +5,9 @@ const backendUrl =
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Next dev's HMR websocket only accepts `localhost` origins by default; browsing
+  // via 127.0.0.1 silently kills the HMR connection and hydration never completes.
+  allowedDevOrigins: ["127.0.0.1"],
   async rewrites() {
     const base = `${backendUrl}/api`;
     return [

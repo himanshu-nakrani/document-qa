@@ -1197,12 +1197,22 @@ export async function login(email: string, password: string): Promise<AuthUser> 
 }
 
 export async function logout(): Promise<void> {
-  const res = await apiFetch("/api/auth/logout", {
-    method: "POST",
-    headers: baseHeaders({}),
-  });
-  if (!res.ok) throw new Error(await errorMessage(res));
-  updateStoredSession({ authToken: null });
+  // [FIX 6.4] Always drop the local token, even when the server call fails,
+  // and return a resolved promise so callers never see an unhandled
+  // rejection from signing out of a dead session.
+  try {
+    const res = await apiFetch("/api/auth/logout", {
+      method: "POST",
+      headers: baseHeaders({}),
+    });
+    if (!res.ok) {
+      console.error("logout_request_failed", res.status);
+    }
+  } catch (err) {
+    console.error("logout_request_error", err);
+  } finally {
+    updateStoredSession({ authToken: null });
+  }
 }
 
 export async function me(): Promise<AuthUser | null> {

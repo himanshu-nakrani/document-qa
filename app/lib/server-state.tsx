@@ -41,11 +41,15 @@ interface ServerStateValue {
   selectConversation: (conversationId: string | null) => Promise<void>;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   addMessage: (message: Message) => void;
+  /** Fix 5.2: stream mutations are targeted at a specific message id, so a
+   *  stale event from an aborted stream can never contaminate whichever
+   *  assistant bubble happens to be last. Unknown ids are a no-op. */
   appendToMessage: (messageId: string, token: string) => void;
   updateMessageSources: (messageId: string, sources: Citation[]) => void;
-  /** Swap a temp client-side id for the durable id returned by the backend,
-   *  so downstream actions like feedback writes reference the persisted message. */
-  updateMessageId: (clientId: string, durableId: string) => void;
+  /** Swap the temp client-side id for the durable id returned by the backend,
+   *  so downstream actions like feedback writes (Phase 3.8) reference the
+   *  persisted message. */
+  updateMessageId: (tempId: string, durableId: string) => void;
 }
 
 const ServerStateContext = createContext<ServerStateValue | null>(null);
@@ -209,36 +213,34 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const appendToMessage = useCallback((messageId: string, token: string) => {
-    if (!messageId || !token) return;
-    setMessages((current) =>
-      current.map((message) =>
-        message.id === messageId && message.role === "assistant"
-          ? { ...message, content: message.content + token }
-          : message
-      )
-    );
+    setMessages((current) => {
+      const idx = current.findIndex((m) => m.id === messageId);
+      if (idx === -1) return current;
+      const next = [...current];
+      next[idx] = { ...next[idx], content: next[idx].content + token };
+      return next;
+    });
   }, []);
 
   const updateMessageSources = useCallback((messageId: string, sources: Citation[]) => {
-    if (!messageId) return;
-    setMessages((current) =>
-      current.map((message) =>
-        message.id === messageId && message.role === "assistant"
-          ? { ...message, sources }
-          : message
-      )
-    );
+    setMessages((current) => {
+      const idx = current.findIndex((m) => m.id === messageId);
+      if (idx === -1) return current;
+      const next = [...current];
+      next[idx] = { ...next[idx], sources };
+      return next;
+    });
   }, []);
 
-  const updateMessageId = useCallback((clientId: string, durableId: string) => {
-    if (!clientId || !durableId) return;
-    setMessages((current) =>
-      current.map((message) =>
-        message.id === clientId && message.role === "assistant"
-          ? { ...message, id: durableId }
-          : message
-      )
-    );
+  const updateMessageId = useCallback((tempId: string, durableId: string) => {
+    if (!durableId) return;
+    setMessages((current) => {
+      const idx = current.findIndex((m) => m.id === tempId);
+      if (idx === -1 || current[idx].id === durableId) return current;
+      const next = [...current];
+      next[idx] = { ...next[idx], id: durableId };
+      return next;
+    });
   }, []);
 
   useEffect(() => {

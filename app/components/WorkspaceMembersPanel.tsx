@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Copy, Loader2, Trash2, Users, X } from "lucide-react";
+import { Check, Copy, Loader2, Trash2, Users, X } from "lucide-react";
 import {
   addWorkspaceMember,
   createWorkspaceInvitation,
@@ -17,7 +16,7 @@ import {
   type WorkspaceRole,
 } from "../lib/api";
 import { useWorkspaceRole } from "../lib/use-workspace-role";
-import { EASE_OUT } from "../lib/motion";
+import { Button, EmptyState, ErrorBanner, Modal, SelectField, TextField } from "./ui";
 
 interface WorkspaceMembersPanelProps {
   open: boolean;
@@ -28,6 +27,20 @@ interface WorkspaceMembersPanelProps {
 }
 
 const ROLE_OPTIONS: WorkspaceRole[] = ["owner", "admin", "editor", "viewer"];
+
+const ROLE_SELECT_OPTIONS = ROLE_OPTIONS.map((role) => ({ value: role, label: role }));
+
+/** Eyebrow label for the two panel sections. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h3
+      className="text-[10px] font-medium uppercase tracking-widest mb-2"
+      style={{ color: "var(--text-tertiary)" }}
+    >
+      {children}
+    </h3>
+  );
+}
 
 /**
  * Phase 3: workspace members + invitations management.
@@ -52,7 +65,7 @@ export default function WorkspaceMembersPanel({
   const [busy, setBusy] = useState(false);
 
   // Phase 3: role-aware UI disabling via backend-resolved role.
-  const { role: currentUserRole, canManage } = useWorkspaceRole(auth, workspaceId);
+  const { canManage } = useWorkspaceRole(auth, workspaceId);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>("editor");
@@ -186,311 +199,255 @@ export default function WorkspaceMembersPanel({
   };
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: EASE_OUT }}
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      busy={busy}
+      title="Workspace members"
+      width={680}
+      height="min(640px, 86vh)"
+      align="top"
+    >
+      <div className="flex flex-col h-full min-h-0">
+        <header
+          className="flex items-center justify-between gap-3 px-5 py-3.5 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--border)" }}
         >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ duration: 0.2, ease: EASE_OUT }}
-            className="w-[min(820px,94vw)] h-[min(680px,86vh)] flex flex-col rounded-2xl overflow-hidden"
-            style={{
-              background: "var(--bg-primary)",
-              border: "1px solid var(--border)",
-              boxShadow: "0 24px 48px rgba(0,0,0,0.35)",
-            }}
-          >
-            <header
-              className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-              style={{ borderBottom: "1px solid var(--border)" }}
+          <div className="flex items-baseline gap-2.5 min-w-0">
+            <h2 className="display text-[15px] font-semibold truncate">Workspace members</h2>
+            <span
+              className="text-[10px] uppercase tracking-widest truncate"
+              style={{ color: "var(--text-muted)" }}
             >
-              <div className="flex items-center gap-2">
-                <Users size={14} style={{ color: "var(--accent-brand)" }} />
-                <h2 className="text-sm font-semibold">Members &amp; invitations</h2>
-                <span
-                  className="text-[10px] uppercase tracking-widest"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {workspaceName}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-lg"
+              {workspaceName}
+            </span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close members panel">
+            <X size={14} />
+          </Button>
+        </header>
+
+        {error ? (
+          <div className="px-4 pt-3 flex-shrink-0">
+            <ErrorBanner message={error} />
+          </div>
+        ) : null}
+
+        {!canManage ? (
+          <div className="px-4 pt-3 flex-shrink-0">
+            <p
+              className="text-[11px] leading-relaxed px-3 py-2.5 rounded-lg"
+              style={{
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border)",
+                color: "var(--text-tertiary)",
+              }}
+            >
+              You don&rsquo;t have permission to manage members. Contact a workspace
+              owner or admin for access.
+            </p>
+          </div>
+        ) : null}
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-6">
+          {/* Members section */}
+          <section>
+            <SectionLabel>Members</SectionLabel>
+            {loading && members.length === 0 ? (
+              <div
+                className="flex items-center gap-2 text-[11px]"
                 style={{ color: "var(--text-muted)" }}
-                aria-label="Close members panel"
               >
-                <X size={14} />
-              </button>
-            </header>
-
-            {error ? (
-              <div
-                className="px-4 py-2 text-[11px] flex-shrink-0"
-                style={{ background: "var(--error-soft)", color: "var(--error)" }}
-              >
-                {error}
+                <Loader2 size={11} className="animate-spin" /> Loading members…
               </div>
             ) : null}
+            {!loading && members.length === 0 ? (
+              <EmptyState
+                icon={<Users size={16} />}
+                title="No additional members"
+                description="The workspace owner has full access by default."
+              />
+            ) : null}
+            <ul className="flex flex-col gap-2">
+              {members.map((member) => (
+                <li
+                  key={member.id}
+                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg"
+                  style={{
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-medium truncate">
+                      {member.email || member.user_id}
+                    </div>
+                    <div
+                      className="data-num text-[10px] truncate"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {member.user_id}
+                    </div>
+                  </div>
+                  <SelectField
+                    label="Role"
+                    aria-label={`Role for ${member.email || member.user_id}`}
+                    className="[&_label]:sr-only w-28 flex-shrink-0"
+                    options={ROLE_SELECT_OPTIONS}
+                    value={member.role}
+                    disabled={busy}
+                    onChange={(e) =>
+                      void handleRoleChange(member, e.target.value as WorkspaceRole)
+                    }
+                  />
+                  {canManage ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleRemoveMember(member)}
+                      disabled={busy}
+                      style={{ color: "var(--error)" }}
+                      title="Remove member"
+                      aria-label="Remove member"
+                      className="flex-shrink-0"
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
 
-            {!canManage ? (
-              <div
-                className="px-4 py-3 text-[11px] flex-shrink-0"
-                style={{
-                  background: "var(--bg-surface)",
-                  color: "var(--text-muted)",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                You don&rsquo;t have permission to manage members. Contact a workspace
-                owner or admin for access.
+            {canManage ? (
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <TextField
+                  label="User ID"
+                  placeholder="User ID"
+                  className="flex-1 min-w-[180px]"
+                  value={memberUserId}
+                  onChange={(e) => setMemberUserId(e.target.value)}
+                />
+                <SelectField
+                  label="Role"
+                  className="w-28"
+                  options={ROLE_SELECT_OPTIONS}
+                  value={memberRole}
+                  onChange={(e) => setMemberRole(e.target.value as WorkspaceRole)}
+                />
+                <Button variant="secondary" size="md" onClick={() => void handleAddMember()} disabled={busy}>
+                  Add member
+                </Button>
               </div>
             ) : null}
+          </section>
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-6">
-              {/* Members section */}
-              <section>
-                <h3 className="text-xs font-semibold mb-2">Members</h3>
-                {loading && members.length === 0 ? (
-                  <div
-                    className="flex items-center gap-2 text-[11px]"
-                    style={{ color: "var(--text-muted)" }}
+          {/* Invitations section */}
+          <section>
+            <SectionLabel>Pending invitations</SectionLabel>
+            {loading && invitations.length === 0 ? null : invitations.length === 0 ? (
+              <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                No pending invitations.
+              </div>
+            ) : null}
+            <ul className="flex flex-col gap-2">
+              {invitations.map((invitation) => (
+                <li
+                  key={invitation.id}
+                  className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg"
+                  style={{
+                    background: "var(--bg-surface)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-medium truncate">
+                      {invitation.email}
+                    </div>
+                    <div
+                      className="text-[10px] flex items-center gap-1.5 min-w-0"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      <span className="uppercase tracking-widest flex-shrink-0">
+                        {invitation.role}
+                      </span>
+                      <span>{invitation.accepted_at ? "accepted" : "pending"}</span>
+                      {invitation.expires_at ? (
+                        <span className="truncate">
+                          expires{" "}
+                          <span className="data-num">
+                            {new Date(invitation.expires_at).toLocaleDateString()}
+                          </span>
+                        </span>
+                      ) : null}
+                      <span
+                        className="data-num text-[10px] truncate px-1 rounded-sm flex-1 min-w-0"
+                        title={invitation.token}
+                        style={{
+                          background: "var(--bg-primary)",
+                          border: "1px solid var(--border)",
+                          color: "var(--text-tertiary)",
+                        }}
+                      >
+                        {invitation.token}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void copyToken(invitation.token)}
+                    disabled={busy}
+                    title="Copy invitation token"
+                    className="flex-shrink-0"
                   >
-                    <Loader2 size={11} className="animate-spin" /> Loading members…
-                  </div>
-                ) : null}
-                {!loading && members.length === 0 ? (
-                  <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                    No additional members. The workspace owner has full access by
-                    default.
-                  </div>
-                ) : null}
-                <ul className="flex flex-col gap-1">
-                  {members.map((member) => (
-                    <li
-                      key={member.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg"
-                      style={{
-                        background: "var(--bg-surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium truncate">
-                          {member.email || member.user_id}
-                        </div>
-                        <div
-                          className="text-[10px] truncate"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {member.user_id}
-                        </div>
-                      </div>
-                      <select
-                        value={member.role}
-                        onChange={(e) =>
-                          void handleRoleChange(member, e.target.value as WorkspaceRole)
-                        }
-                        disabled={busy}
-className="text-[11px] px-2 py-1 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--focus-ring-strong)]"
-                        style={{
-                          background: "var(--bg-primary)",
-                          color: "var(--text-primary)",
-                          border: "1px solid var(--border)",
-                        }}
-                      >
-                        {ROLE_OPTIONS.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => void handleRemoveMember(member)}
-                        disabled={busy}
-                        className="p-1.5 rounded-md"
-                        style={{ color: "var(--error)" }}
-                        title="Remove member" aria-label="Remove member"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                    {copiedToken === invitation.token ? (
+                      <Check size={11} style={{ color: "var(--success)" }} />
+                    ) : (
+                      <Copy size={11} />
+                    )}
+                    {copiedToken === invitation.token ? "Copied" : "Copy"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleRevoke(invitation)}
+                    disabled={busy}
+                    style={{ color: "var(--error)" }}
+                    title="Revoke invitation"
+                    aria-label="Revoke invitation"
+                    className="flex-shrink-0"
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
 
-                {canManage ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <input
-                      value={memberUserId}
-                      onChange={(e) => setMemberUserId(e.target.value)}
-                      placeholder="User ID"
-                      aria-label="User ID"
-                      className="flex-1 min-w-[180px] bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] rounded-lg px-2 py-1.5"
-                      style={{
-                        color: "var(--text-primary)",
-                        background: "var(--bg-surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    />
-                    <select
-                      value={memberRole}
-                      onChange={(e) => setMemberRole(e.target.value as WorkspaceRole)}
-                      className="text-xs px-2 py-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-                      style={{
-                        color: "var(--text-primary)",
-                        background: "var(--bg-surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      {ROLE_OPTIONS.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                    <motion.button
-                      type="button"
-                      onClick={() => void handleAddMember()}
-                      disabled={busy}
-                      whileTap={{ scale: 0.97 }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                      style={{
-                        background: busy ? "var(--bg-elevated)" : "var(--accent)",
-                        color: busy ? "var(--text-muted)" : "var(--accent-fg)",
-                      }}
-                    >
-                      Add member
-                    </motion.button>
-                  </div>
-                ) : null}
-              </section>
-
-              {/* Invitations section */}
-              <section>
-                <h3 className="text-xs font-semibold mb-2">Pending invitations</h3>
-                {loading && invitations.length === 0 ? null : invitations.length === 0 ? (
-                  <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                    No pending invitations.
-                  </div>
-                ) : null}
-                <ul className="flex flex-col gap-1">
-                  {invitations.map((invitation) => (
-                    <li
-                      key={invitation.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg"
-                      style={{
-                        background: "var(--bg-surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium truncate">
-                          {invitation.email}
-                        </div>
-                        <div
-                          className="text-[10px] truncate"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {invitation.role}
-                          {invitation.accepted_at ? " · accepted" : " · pending"}
-                          {invitation.expires_at
-                            ? ` · expires ${new Date(invitation.expires_at).toLocaleDateString()}`
-                            : ""}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void copyToken(invitation.token)}
-                        disabled={busy}
-                        className="text-[11px] px-2 py-1 rounded-md flex items-center gap-1"
-                        style={{
-                          color: "var(--text-muted)",
-                          background: "var(--bg-primary)",
-                          border: "1px solid var(--border)",
-                        }}
-                        title="Copy invitation token"
-                      >
-                        <Copy size={11} />
-                        {copiedToken === invitation.token ? "Copied" : "Token"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleRevoke(invitation)}
-                        disabled={busy}
-                        className="p-1.5 rounded-md"
-                        style={{ color: "var(--error)" }}
-                        title="Revoke invitation" aria-label="Revoke invitation"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-
-                {canManage ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <input
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="teammate@example.com"
-                      type="email"
-                      aria-label="Teammate email address"
-                      className="flex-1 min-w-[200px] bg-transparent text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] rounded-lg px-2 py-1.5"
-                      style={{
-                        color: "var(--text-primary)",
-                        background: "var(--bg-surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    />
-                    <select
-                      value={inviteRole}
-                      onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
-                      className="text-xs px-2 py-1.5 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
-                      style={{
-                        color: "var(--text-primary)",
-                        background: "var(--bg-surface)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      {ROLE_OPTIONS.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                    <motion.button
-                      type="button"
-                      onClick={() => void handleInvite()}
-                      disabled={busy}
-                      whileTap={{ scale: 0.97 }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                      style={{
-                        background: busy ? "var(--bg-elevated)" : "var(--accent)",
-                        color: busy ? "var(--text-muted)" : "var(--accent-fg)",
-                      }}
-                    >
-                      Invite
-                    </motion.button>
-                  </div>
-                ) : null}
-              </section>
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+            {canManage ? (
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <TextField
+                  label="Email"
+                  placeholder="teammate@example.com"
+                  type="email"
+                  className="flex-1 min-w-[200px]"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+                <SelectField
+                  label="Role"
+                  className="w-28"
+                  options={ROLE_SELECT_OPTIONS}
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
+                />
+                <Button variant="primary" size="md" onClick={() => void handleInvite()} disabled={busy}>
+                  Create invitation
+                </Button>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </div>
+    </Modal>
   );
 }
