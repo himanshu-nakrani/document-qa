@@ -124,7 +124,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     { value: "gemini", label: "Google Gemini", icon: "G" },
   ];
 
-  const activeAccentPack = LEGACY_PACK_ALIASES[settings.accentPack] ?? "lime";
+  const resolvedAccent = LEGACY_PACK_ALIASES[settings.accentPack] ?? settings.accentPack;
+  const activeAccentPack =
+    resolvedAccent === "lime" || resolvedAccent === "pulse" || resolvedAccent === "beam"
+      ? resolvedAccent
+      : "lime";
 
   const handleSignOut = async () => {
     try {

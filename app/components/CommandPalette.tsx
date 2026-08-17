@@ -59,7 +59,7 @@ export default function CommandPalette({ open, onClose, onUpload, onSettings }: 
  */
 function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "open">) {
   const { state, dispatch } = useStore();
-  const { documents, selectDocument } = useServerState();
+  const { documents, selectDocument, selectConversation } = useServerState();
   const { settings } = state;
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -107,7 +107,7 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
         icon: <MessageSquarePlus size={14} />,
         group: "Actions",
         action: () => {
-          dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: null });
+          void selectConversation(null);
           onClose();
         },
         keywords: ["new", "chat", "conversation", "fresh"],
@@ -194,7 +194,7 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
         keywords: ["layout", "research", "full", "wide"],
       },
     ],
-    [settings, onUpload, onSettings, onClose, dispatch],
+    [settings, onUpload, onSettings, onClose, dispatch, selectConversation],
   );
 
   const docCommands: CommandItem[] = useMemo(

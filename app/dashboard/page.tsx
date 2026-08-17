@@ -9,10 +9,12 @@ import ChatArea from "../components/ChatArea";
 import SettingsPanel from "../components/SettingsPanel";
 import UploadModal from "../components/UploadModal";
 import CommandPalette from "../components/CommandPalette";
+import OAuthCallback from "../components/OAuthCallback";
 import { ToastProvider } from "../components/Toast";
 import { ServerStateProvider } from "../lib/server-state";
 import { StoreProvider, useStore } from "../lib/store";
 import { useKeyboardShortcuts } from "../lib/useKeyboardShortcuts";
+import { ErrorBanner } from "../components/ui";
 
 /**
  * Top-level application shell that manages global UI state, keyboard shortcuts, drag-and-drop uploads, and conditional screens.
@@ -21,6 +23,27 @@ import { useKeyboardShortcuts } from "../lib/useKeyboardShortcuts";
  *
  * @returns The app's UI as a JSX element.
  */
+function DashboardOAuth() {
+  const { dispatch } = useStore();
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  return (
+    <>
+      <OAuthCallback
+        onAuthenticated={(user) => {
+          dispatch({ type: "SET_CURRENT_USER", payload: user });
+          dispatch({ type: "SET_SETUP_COMPLETE", payload: true });
+        }}
+        onError={setOauthError}
+      />
+      {oauthError ? (
+        <div className="fixed top-3 left-1/2 z-[60] w-[min(420px,92vw)] -translate-x-1/2">
+          <ErrorBanner message={oauthError} onDismiss={() => setOauthError(null)} />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function AppShell() {
   const { state, dispatch } = useStore();
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -132,6 +155,7 @@ function AppShell() {
 export default function Home() {
   return (
     <StoreProvider>
+      <DashboardOAuth />
       <ServerStateProvider>
         <ToastProvider>
           <AppShell />

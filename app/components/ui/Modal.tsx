@@ -13,6 +13,10 @@ const emptySubscribe = () => () => {};
 const isClient = () => true;
 const isServer = () => false;
 
+/** Open-modal ids, last entry is topmost. Escape/Tab only apply to the top. */
+const modalStack: number[] = [];
+let modalSeq = 0;
+
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -59,6 +63,8 @@ export function Modal({
   const requestClose = useCallback(() => {
     if (!busy) onClose();
   }, [busy, onClose]);
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
 
   // Focus management: save the activator, focus the dialog on open,
   // restore focus on close.
@@ -86,13 +92,21 @@ export function Modal({
     };
   }, [open]);
 
-  // Escape to close (unless busy), Tab to cycle inside the dialog.
+  // Escape/Tab only on the topmost open modal. stopPropagation is not enough:
+  // every instance listens on `document`, so a nested confirm would also
+  // close its parent without a stack check.
   useEffect(() => {
     if (!open) return;
+    const id = ++modalSeq;
+    modalStack.push(id);
+    const isTop = () => modalStack[modalStack.length - 1] === id;
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!isTop()) return;
       if (event.key === "Escape") {
+        event.preventDefault();
         event.stopPropagation();
-        requestClose();
+        event.stopImmediatePropagation();
+        requestCloseRef.current();
         return;
       }
       if (event.key === "Tab") {
@@ -119,8 +133,12 @@ export function Modal({
       }
     };
     document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [open, requestClose]);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      const index = modalStack.lastIndexOf(id);
+      if (index >= 0) modalStack.splice(index, 1);
+    };
+  }, [open]);
 
   if (!mounted) return null;
 
