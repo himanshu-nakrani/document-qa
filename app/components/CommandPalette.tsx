@@ -20,6 +20,7 @@ import {
 import { EASE_OUT } from "../lib/motion";
 import { useStore } from "../lib/store";
 import { useServerState } from "../lib/server-state";
+import { useEscapeLayer } from "./ui/Modal";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -59,7 +60,7 @@ export default function CommandPalette({ open, onClose, onUpload, onSettings }: 
  */
 function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "open">) {
   const { state, dispatch } = useStore();
-  const { documents, selectDocument } = useServerState();
+  const { documents, selectDocument, selectConversation } = useServerState();
   const { settings } = state;
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -73,6 +74,11 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
     inputRef.current?.focus();
     return () => restoreRef.current?.focus({ preventScroll: true });
   }, []);
+
+  // Join Modal's Escape stack so Escape closes the palette rather than a
+  // Modal stacked underneath it (Modal's document-capture listener calls
+  // stopImmediatePropagation, which otherwise swallows the key first).
+  useEscapeLayer(true, onClose);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -107,7 +113,7 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
         icon: <MessageSquarePlus size={14} />,
         group: "Actions",
         action: () => {
-          dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: null });
+          void selectConversation(null);
           onClose();
         },
         keywords: ["new", "chat", "conversation", "fresh"],
@@ -194,7 +200,7 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
         keywords: ["layout", "research", "full", "wide"],
       },
     ],
-    [settings, onUpload, onSettings, onClose, dispatch],
+    [settings, onUpload, onSettings, onClose, dispatch, selectConversation],
   );
 
   const docCommands: CommandItem[] = useMemo(
@@ -239,6 +245,37 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
   const activeId = filtered[currentIdx] ? `cmd-opt-${filtered[currentIdx].id}` : undefined;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      // Cycle focus inside the palette. Bound on the panel (not the input) so
+      // Tab from the footer or a result row cannot walk out of an aria-modal
+      // dialog; `getClientRects` keeps `position: fixed` children in the cycle.
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => el.getClientRects().length > 0 || el === document.activeElement,
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      const outside = !panel.contains(active) || active === panel;
+      if (e.shiftKey) {
+        if (outside || active === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (outside || active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+      return;
+    }
+
+    // Arrow/Enter drive the combobox, so only honour them from the search
+    // input — otherwise Enter on the footer would fire both the focused
+    // button and the highlighted command.
+    if (e.target !== inputRef.current) return;
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setSelectedIdx((i) => Math.min(i + 1, filtered.length - 1));
@@ -248,22 +285,6 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
     } else if (e.key === "Enter") {
       e.preventDefault();
       filtered[currentIdx]?.action();
-    } else if (e.key === "Tab") {
-      // Cycle focus inside the palette (input → footer → back).
-      const panel = panelRef.current;
-      if (!panel) return;
-      const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (e.shiftKey && (active === first || !panel.contains(active))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
     }
   };
 
@@ -285,6 +306,7 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
         aria-modal="true"
         aria-label="Command palette"
         className="w-full rounded-xl overflow-hidden"
+        onKeyDown={handleKeyDown}
         style={{
           maxWidth: 560,
           background: "var(--bg-secondary)",
@@ -305,7 +327,6 @@ function Palette({ onClose, onUpload, onSettings }: Omit<CommandPaletteProps, "o
               setQuery(e.target.value);
               setSelectedIdx(0);
             }}
-            onKeyDown={handleKeyDown}
             placeholder="Type a command or search…"
             className="flex-1 bg-transparent text-sm outline-none rounded-lg px-2 py-1 focus-ring"
             style={{ color: "var(--text-primary)" }}

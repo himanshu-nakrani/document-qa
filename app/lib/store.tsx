@@ -78,28 +78,9 @@ function generateClientSessionId(): string {
 }
 
 /**
- * Determines whether a non-empty auth token is present in session storage under the `rag-session` key.
- *
- * @returns `true` if a non-empty `authToken` exists and is accessible in `sessionStorage["rag-session"]`, `false` otherwise (including when not running in a browser or when parsing/accessing storage fails).
- */
-function hasStoredAuthToken(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    const rawSecrets = sessionStorage.getItem("rag-session");
-    if (!rawSecrets) return false;
-    const parsed = JSON.parse(rawSecrets) as SessionSecrets;
-    return Boolean(parsed.authToken?.trim());
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Resolve and return the application's settings by combining defaults with any persisted preferences and session secrets available in the browser.
- *
- * Loads theme from localStorage for all users. When a stored session auth token exists, additional non-sensitive preferences (provider, chatModel, embeddingModel, topK, similarityThreshold) are loaded from localStorage. Session-scoped secrets (providerApiKey, clientSessionId) are read from sessionStorage for both authenticated and anonymous users so anonymous sessions can resume after refresh.
- *
- * @returns An AppSettings object containing the resolved `provider`, `chatModel`, `embeddingModel`, `providerApiKey`, `clientSessionId`, `topK`, `similarityThreshold`, and `theme`. `providerApiKey` will be empty unless found in session storage; `clientSessionId` will be generated if not present.
+ * Resolve settings from defaults plus localStorage prefs and session secrets.
+ * Display and model prefs load for every visitor so cookie/new-tab sessions
+ * keep their saved provider and models. Secrets stay in sessionStorage.
  */
 function loadSettings(): AppSettings {
   if (typeof window === "undefined") {
@@ -119,8 +100,6 @@ function loadSettings(): AppSettings {
     };
   }
 
-  const isAuthenticated = hasStoredAuthToken();
-
   let provider: Provider = "openai";
   let chatModel = DEFAULT_CHAT.openai;
   let embeddingModel = DEFAULT_EMBEDDING.openai;
@@ -134,7 +113,6 @@ function loadSettings(): AppSettings {
   let accentPack: "lime" | "pulse" | "beam" = "lime";
   let chatLayout: "default" | "focus" | "research" = "default";
 
-  // Load theme from localStorage regardless of auth state (it's not sensitive)
   try {
     const rawPrefs = localStorage.getItem("rag-prefs");
     if (rawPrefs) {
@@ -142,8 +120,6 @@ function loadSettings(): AppSettings {
       if (parsed.theme === "light" || parsed.theme === "dark") theme = parsed.theme;
       if (typeof parsed.highContrast === "boolean") highContrast = parsed.highContrast;
       if (typeof parsed.reducedMotion === "boolean") reducedMotion = parsed.reducedMotion;
-      // Signal pack names; legacy packs (terracotta/emerald/amber) migrate to
-      // their nearest Signal equivalent.
       if (parsed.accentPack === "lime" || parsed.accentPack === "pulse" || parsed.accentPack === "beam") {
         accentPack = parsed.accentPack;
       } else if (parsed.accentPack === "emerald") {
@@ -154,27 +130,27 @@ function loadSettings(): AppSettings {
         accentPack = "lime";
       }
       if (parsed.chatLayout === "focus" || parsed.chatLayout === "research") chatLayout = parsed.chatLayout;
+      // Provider/model prefs are not secrets. Load them even for cookie-only
+      // or new-tab sessions so a later persist cannot overwrite them with defaults.
+      const validProviders: Provider[] = ["openai", "gemini"];
+      if (validProviders.includes(parsed.provider as Provider)) {
+        provider = parsed.provider as Provider;
+      }
+      if (typeof parsed.chatModel === "string" && parsed.chatModel.trim()) {
+        chatModel = parsed.chatModel;
+      } else {
+        chatModel = DEFAULT_CHAT[provider];
+      }
+      if (typeof parsed.embeddingModel === "string" && parsed.embeddingModel.trim()) {
+        embeddingModel = parsed.embeddingModel;
+      } else {
+        embeddingModel = DEFAULT_EMBEDDING[provider];
+      }
+      if (typeof parsed.topK === "number") topK = parsed.topK;
+      if (typeof parsed.similarityThreshold === "number") similarityThreshold = parsed.similarityThreshold;
     }
   } catch {
     // Use default
-  }
-
-  if (isAuthenticated) {
-    // For authenticated users: load persisted settings
-    try {
-      const rawPrefs = localStorage.getItem("rag-prefs");
-      if (rawPrefs) {
-        const parsed = JSON.parse(rawPrefs) as Partial<AppSettings>;
-        const validProviders: Provider[] = ["openai", "gemini"];
-        provider = validProviders.includes(parsed.provider as Provider) ? (parsed.provider as Provider) : "openai";
-        chatModel = parsed.chatModel ?? DEFAULT_CHAT[provider];
-        embeddingModel = parsed.embeddingModel ?? DEFAULT_EMBEDDING[provider];
-        if (typeof parsed.topK === "number") topK = parsed.topK;
-        if (typeof parsed.similarityThreshold === "number") similarityThreshold = parsed.similarityThreshold;
-      }
-    } catch {
-      // Use defaults
-    }
   }
 
   // Load session-scoped secrets for both authenticated and anonymous users.
@@ -281,60 +257,34 @@ type Action =
   | { type: "SET_WORKSPACES_ERROR"; payload: string | null };
 
 /**
- * Persist selected app settings to browser storage.
- *
- * Always writes the user's `theme` to localStorage (under "rag-prefs"). When `isAuthenticated` is
- * true, also persists provider, model selections, `topK`, and `similarityThreshold` to localStorage.
- * Session-scoped secrets (`providerApiKey` and `clientSessionId`) are stored in sessionStorage (under
- * "rag-session") for both authenticated and anonymous users so anonymous sessions can resume after refresh.
- *
- * @param next - The full AppSettings object whose values should be persisted.
- * @param isAuthenticated - Whether the current session is authenticated; controls which
- *                          settings are persisted beyond theme.
+ * Persist settings. Display prefs and provider/model choices go to localStorage
+ * for every visitor (they are not secrets). API key and session id stay in
+ * sessionStorage.
  */
-function persistSettings(next: AppSettings, isAuthenticated: boolean): void {
+function persistSettings(next: AppSettings): void {
   if (typeof window === "undefined") return;
 
-  // Always persist theme and display preferences regardless of auth
   try {
     const rawPrefs = localStorage.getItem("rag-prefs");
     const existing = rawPrefs ? JSON.parse(rawPrefs) : {};
-    localStorage.setItem("rag-prefs", JSON.stringify({
-      ...existing,
-      theme: next.theme,
-      highContrast: next.highContrast,
-      reducedMotion: next.reducedMotion,
-      accentPack: next.accentPack,
-      chatLayout: next.chatLayout,
-    }));
+    localStorage.setItem(
+      "rag-prefs",
+      JSON.stringify({
+        ...existing,
+        theme: next.theme,
+        highContrast: next.highContrast,
+        reducedMotion: next.reducedMotion,
+        accentPack: next.accentPack,
+        chatLayout: next.chatLayout,
+        provider: next.provider,
+        chatModel: next.chatModel,
+        embeddingModel: next.embeddingModel,
+        topK: next.topK,
+        similarityThreshold: next.similarityThreshold,
+      }),
+    );
   } catch {
     // ignore
-  }
-
-  // Only persist other settings for authenticated users
-  if (isAuthenticated) {
-    try {
-      const rawPrefs = localStorage.getItem("rag-prefs");
-      const existing = rawPrefs ? JSON.parse(rawPrefs) : {};
-      localStorage.setItem(
-        "rag-prefs",
-        JSON.stringify({
-          ...existing,
-          provider: next.provider,
-          chatModel: next.chatModel,
-          embeddingModel: next.embeddingModel,
-          topK: next.topK,
-          similarityThreshold: next.similarityThreshold,
-          theme: next.theme,
-          highContrast: next.highContrast,
-          reducedMotion: next.reducedMotion,
-          accentPack: next.accentPack,
-          chatLayout: next.chatLayout,
-        })
-      );
-    } catch {
-      // ignore
-    }
   }
 
   // Always persist session-scoped secrets so anonymous users can resume after refresh.
@@ -374,7 +324,7 @@ function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "SET_SETTINGS": {
       const next = { ...state.settings, ...action.payload };
-      persistSettings(next, Boolean(state.currentUser));
+      persistSettings(next);
       if (typeof document !== "undefined") {
         if (action.payload.theme) {
           document.documentElement.setAttribute("data-theme", next.theme);
@@ -411,20 +361,11 @@ function reducer(state: AppState, action: Action): AppState {
         chatModel: DEFAULT_CHAT[provider],
         embeddingModel: DEFAULT_EMBEDDING[provider],
       };
-      persistSettings(next, Boolean(state.currentUser));
+      persistSettings(next);
       return { ...state, settings: next };
     }
-    case "SET_CURRENT_USER": {
-      // Identity changed: cached workspace roles belong to the previous
-      // identity and the cookie-session probe should re-run on next login.
-      clearRoleCache();
-      try {
-        sessionStorage.removeItem("rag-me-probed");
-      } catch {
-        // storage unavailable — nothing to reset
-      }
+    case "SET_CURRENT_USER":
       return { ...state, currentUser: action.payload };
-    }
     case "SET_AUTH_LOADING":
       return { ...state, authLoading: action.payload };
     case "SET_ACTIVE_DOCUMENT":
@@ -516,10 +457,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "SET_SETTINGS", payload: loadSettings() });
   }, []);
 
-  // Phase 0 bootstrap: resolve workspaces (server auto-creates a default).
   const clientSessionId = state.settings.clientSessionId;
+  const currentUserId = state.currentUser?.id ?? null;
+
+  const prevUserIdRef = React.useRef<string | null>(null);
   useEffect(() => {
-    if (!clientSessionId) return;
+    if (prevUserIdRef.current === currentUserId) return;
+    const isInitialAnonymous = prevUserIdRef.current === null && currentUserId === null;
+    prevUserIdRef.current = currentUserId;
+    if (isInitialAnonymous) return;
+    clearRoleCache();
+    // Clear the previous identity's workspace list as well as the selection —
+    // leaving `workspaces` populated kept the old account's names in the
+    // switcher until listWorkspaces resolved for the new identity.
+    dispatch({ type: "SET_WORKSPACES", payload: [] });
+    dispatch({ type: "SET_ACTIVE_WORKSPACE", payload: null });
+    dispatch({ type: "SET_ACTIVE_DOCUMENT", payload: null });
+    dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: null });
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (state.authLoading || !clientSessionId) return;
     let cancelled = false;
     const run = async () => {
       dispatch({ type: "SET_WORKSPACES_LOADING", payload: true });
@@ -546,53 +504,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [clientSessionId]);
+  }, [clientSessionId, currentUserId, state.authLoading]);
 
   useEffect(() => {
     let cancelled = false;
     const loadMe = async () => {
-      if (!hasStoredAuthToken()) {
-        // [FIX 6.2] Cookie-authenticated sessions have no Bearer token in
-        // sessionStorage, so probe /auth/me once per tab session — otherwise
-        // these users are silently treated as anonymous on every visit.
-        let probed = false;
-        try {
-          probed = sessionStorage.getItem("rag-me-probed") === "1";
-        } catch {
-          // storage unavailable — probe anyway
-        }
-        if (probed) {
-          dispatch({ type: "SET_CURRENT_USER", payload: null });
-          dispatch({ type: "SET_AUTH_LOADING", payload: false });
-          return;
-        }
-        try {
-          sessionStorage.setItem("rag-me-probed", "1");
-        } catch {
-          // ignore
-        }
-        dispatch({ type: "SET_AUTH_LOADING", payload: true });
-        try {
-          const user = await me();
-          if (!cancelled) {
-            dispatch({ type: "SET_CURRENT_USER", payload: user ?? null });
-          }
-        } catch {
-          if (!cancelled) {
-            dispatch({ type: "SET_CURRENT_USER", payload: null });
-          }
-        } finally {
-          if (!cancelled) {
-            dispatch({ type: "SET_AUTH_LOADING", payload: false });
-          }
-        }
-        return;
-      }
       dispatch({ type: "SET_AUTH_LOADING", payload: true });
       try {
         const user = await me();
         if (!cancelled) {
-          dispatch({ type: "SET_CURRENT_USER", payload: user });
+          dispatch({ type: "SET_CURRENT_USER", payload: user ?? null });
         }
       } catch {
         if (!cancelled) {

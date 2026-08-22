@@ -16,7 +16,7 @@ import {
   type WorkspaceRole,
 } from "../lib/api";
 import { useWorkspaceRole } from "../lib/use-workspace-role";
-import { Button, EmptyState, ErrorBanner, Modal, SelectField, TextField } from "./ui";
+import { Button, ConfirmDialog, EmptyState, ErrorBanner, Modal, SelectField, TextField } from "./ui";
 
 interface WorkspaceMembersPanelProps {
   open: boolean;
@@ -72,6 +72,11 @@ export default function WorkspaceMembersPanel({
   const [memberUserId, setMemberUserId] = useState("");
   const [memberRole, setMemberRole] = useState<WorkspaceRole>("editor");
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    | { kind: "remove"; member: WorkspaceMember }
+    | { kind: "revoke"; invitation: WorkspaceInvitation }
+    | null
+  >(null);
 
   const refresh = useCallback(async () => {
     if (!open) return;
@@ -120,6 +125,7 @@ export default function WorkspaceMembersPanel({
   };
 
   const handleRoleChange = async (member: WorkspaceMember, role: WorkspaceRole) => {
+    if (!canManage) return;
     setBusy(true);
     setError(null);
     try {
@@ -137,20 +143,9 @@ export default function WorkspaceMembersPanel({
     }
   };
 
-  const handleRemoveMember = async (member: WorkspaceMember) => {
-    if (!window.confirm(`Remove ${member.email ?? member.user_id} from this workspace?`)) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await removeWorkspaceMember(auth, workspaceId, member.id);
-      setMembers((prev) => prev.filter((m) => m.id !== member.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove member.");
-    } finally {
-      setBusy(false);
-    }
+  const handleRemoveMember = (member: WorkspaceMember) => {
+    if (!canManage) return;
+    setPendingAction({ kind: "remove", member });
   };
 
   const handleInvite = async () => {
@@ -174,15 +169,32 @@ export default function WorkspaceMembersPanel({
     }
   };
 
-  const handleRevoke = async (invitation: WorkspaceInvitation) => {
-    if (!window.confirm(`Revoke invitation for ${invitation.email}?`)) return;
+  const handleRevoke = (invitation: WorkspaceInvitation) => {
+    if (!canManage) return;
+    setPendingAction({ kind: "revoke", invitation });
+  };
+
+  const confirmPendingAction = async () => {
+    if (!pendingAction) return;
     setBusy(true);
     setError(null);
     try {
-      await revokeWorkspaceInvitation(auth, workspaceId, invitation.id);
-      setInvitations((prev) => prev.filter((i) => i.id !== invitation.id));
+      if (pendingAction.kind === "remove") {
+        await removeWorkspaceMember(auth, workspaceId, pendingAction.member.id);
+        setMembers((prev) => prev.filter((m) => m.id !== pendingAction.member.id));
+      } else {
+        await revokeWorkspaceInvitation(auth, workspaceId, pendingAction.invitation.id);
+        setInvitations((prev) => prev.filter((i) => i.id !== pendingAction.invitation.id));
+      }
+      setPendingAction(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke invitation.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : pendingAction.kind === "remove"
+            ? "Failed to remove member."
+            : "Failed to revoke invitation.",
+      );
     } finally {
       setBusy(false);
     }
@@ -199,6 +211,7 @@ export default function WorkspaceMembersPanel({
   };
 
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -289,22 +302,31 @@ export default function WorkspaceMembersPanel({
                       {member.user_id}
                     </div>
                   </div>
-                  <SelectField
-                    label="Role"
-                    aria-label={`Role for ${member.email || member.user_id}`}
-                    className="[&_label]:sr-only w-28 flex-shrink-0"
-                    options={ROLE_SELECT_OPTIONS}
-                    value={member.role}
-                    disabled={busy}
-                    onChange={(e) =>
-                      void handleRoleChange(member, e.target.value as WorkspaceRole)
-                    }
-                  />
+                  {canManage ? (
+                    <SelectField
+                      label="Role"
+                      aria-label={`Role for ${member.email || member.user_id}`}
+                      className="[&_label]:sr-only w-28 flex-shrink-0"
+                      options={ROLE_SELECT_OPTIONS}
+                      value={member.role}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void handleRoleChange(member, e.target.value as WorkspaceRole)
+                      }
+                    />
+                  ) : (
+                    <span
+                      className="text-[13px] w-28 flex-shrink-0 capitalize"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      {member.role}
+                    </span>
+                  )}
                   {canManage ? (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => void handleRemoveMember(member)}
+                      onClick={() => handleRemoveMember(member)}
                       disabled={busy}
                       style={{ color: "var(--error)" }}
                       title="Remove member"
@@ -407,18 +429,20 @@ export default function WorkspaceMembersPanel({
                     )}
                     {copiedToken === invitation.token ? "Copied" : "Copy"}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void handleRevoke(invitation)}
-                    disabled={busy}
-                    style={{ color: "var(--error)" }}
-                    title="Revoke invitation"
-                    aria-label="Revoke invitation"
-                    className="flex-shrink-0"
-                  >
-                    <Trash2 size={13} />
-                  </Button>
+                  {canManage ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRevoke(invitation)}
+                      disabled={busy}
+                      style={{ color: "var(--error)" }}
+                      title="Revoke invitation"
+                      aria-label="Revoke invitation"
+                      className="flex-shrink-0"
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -449,5 +473,24 @@ export default function WorkspaceMembersPanel({
         </div>
       </div>
     </Modal>
+    <ConfirmDialog
+      open={pendingAction !== null}
+      title={pendingAction?.kind === "revoke" ? "Revoke invitation" : "Remove member"}
+      message={
+        pendingAction?.kind === "revoke"
+          ? `Revoke invitation for ${pendingAction.invitation.email}?`
+          : pendingAction?.kind === "remove"
+            ? `Remove ${pendingAction.member.email ?? pendingAction.member.user_id} from this workspace?`
+            : ""
+      }
+      confirmLabel={pendingAction?.kind === "revoke" ? "Revoke" : "Remove"}
+      danger
+      busy={busy}
+      onConfirm={() => void confirmPendingAction()}
+      onCancel={() => {
+        if (!busy) setPendingAction(null);
+      }}
+    />
+    </>
   );
 }

@@ -6,6 +6,7 @@ import { Check, ChevronDown, FolderPlus, Layers, Loader2 } from "lucide-react";
 import { createWorkspace, listWorkspaces, type Workspace } from "../lib/api";
 import { transitionFast, transitionNormal } from "../lib/motion";
 import { useStore } from "../lib/store";
+import { useServerState } from "../lib/server-state";
 import { Badge, Button, TextField } from "./ui";
 
 /**
@@ -15,12 +16,14 @@ import { Badge, Button, TextField } from "./ui";
  */
 export default function WorkspaceSwitcher() {
   const { state, dispatch } = useStore();
+  const { selectDocument } = useServerState();
   const { workspaces, activeWorkspaceId, workspacesLoading, workspacesError, settings, currentUser } = state;
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -77,29 +80,31 @@ export default function WorkspaceSwitcher() {
 
   const handleSelect = (workspace: Workspace) => {
     dispatch({ type: "SET_ACTIVE_WORKSPACE", payload: workspace.id });
-    dispatch({ type: "SET_ACTIVE_DOCUMENT", payload: null });
+    void selectDocument(null);
     closeDropdown(false);
   };
 
   const handleCreate = async () => {
     const name = newName.trim();
-    if (!name) {
-      setSubmitError("Workspace name is required.");
+    if (!name || submittingRef.current) {
+      if (!name) setSubmitError("Workspace name is required.");
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
       const created = await createWorkspace(auth, { name });
       dispatch({ type: "UPSERT_WORKSPACE", payload: created });
       dispatch({ type: "SET_ACTIVE_WORKSPACE", payload: created.id });
-      dispatch({ type: "SET_ACTIVE_DOCUMENT", payload: null });
+      void selectDocument(null);
       setNewName("");
       setCreating(false);
       setOpen(false);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to create workspace.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

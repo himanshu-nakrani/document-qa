@@ -48,13 +48,19 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
   const [submitting, setSubmitting] = useState(false);
   const [retryable, setRetryable] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
 
   // Fix #11: track the active polling session so a stale pollJob loop exits
   // when the modal is closed and quickly reopened. A boolean "cancelled" ref
   // would be reset to false on reopen and let an in-flight loop resume,
-  // spawning concurrent loops that clobber each other's state. A monotonic
-  // counter avoids that: each loop captures its session id and bails out as
-  // soon as the active id changes (or is reset to 0 on close/unmount).
+  // spawning concurrent loops that clobber each other's state.
+  //
+  // Two refs, because session ids must be single-use: `pollSeqRef` only ever
+  // increments and hands out a fresh id per open, while `pollSessionRef` holds
+  // the currently-active id (0 = nothing polling). Cancelling writes 0 rather
+  // than reusing a low id, so an abandoned loop can never be handed its own id
+  // back on a later open and revived.
+  const pollSeqRef = useRef(0);
   const pollSessionRef = useRef(0);
 
   // [Fix 6.7.2] Auto-close timer id, so the pending close can be cancelled on
@@ -63,7 +69,7 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
 
   useEffect(() => {
     if (open) {
-      pollSessionRef.current++;
+      pollSessionRef.current = ++pollSeqRef.current;
     }
   }, [open]);
 
@@ -109,15 +115,17 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
     setJob(null);
     setMessage("");
     setDragOver(false);
+    submittingRef.current = false;
     setSubmitting(false);
     setRetryable(false);
   };
 
   const handleClose = () => {
-    if (submitting) return;
+    if (submittingRef.current) return;
     // [Fix 6.7.2] Closing during background polling cancels the poll loop and
     // any pending auto-close; the server-side job keeps running and the
-    // document list's polling picks up the result.
+    // document list's polling picks up the result. 0 means "nothing active" and
+    // is never handed out as a session id, so this loop cannot be revived.
     pollSessionRef.current = 0;
     clearAutoCloseTimer();
     reset();
@@ -157,7 +165,7 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file || submittingRef.current) return;
     if (!settings.providerApiKey.trim()) {
       setStatus("error");
       setMessage("Add your provider API key in Settings before uploading.");
@@ -165,6 +173,7 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setRetryable(false);
     setStatus("queued");
@@ -177,8 +186,8 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
         settings.embeddingModel,
         activeWorkspaceId ?? undefined
       );
-      // [Fix 6.7.2] Only the submission request blocks closing; the polling
-      // phase below runs in the background and the modal stays closable.
+      // Only the submission request blocks closing; polling stays cancellable.
+      submittingRef.current = false;
       setSubmitting(false);
       await refreshDocuments();
       if (response.status === "ready" || !response.job_id) {
@@ -195,11 +204,13 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
       setMessage(error instanceof Error ? error.message : "Upload failed.");
       setRetryable(true);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
   const handleUrlImport = async () => {
+    if (submittingRef.current) return;
     const trimmed = urlValue.trim();
     if (!trimmed) {
       setStatus("error");
@@ -219,6 +230,7 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
       setRetryable(false);
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     setRetryable(false);
     setStatus("queued");
@@ -230,7 +242,7 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
         provider: settings.provider,
         embedding_model: settings.embeddingModel,
       });
-      // [Fix 6.7.2] Request is done — polling below is background work.
+      submittingRef.current = false;
       setSubmitting(false);
       await refreshDocuments();
       if (source.status === "ready") {
@@ -259,6 +271,7 @@ export default function UploadModal({ open, onClose, initialFile }: UploadModalP
       setMessage(error instanceof Error ? error.message : "URL import failed.");
       setRetryable(true);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

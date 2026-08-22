@@ -84,8 +84,10 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
   const [chunkPreview, setChunkPreview] = useState<ChunkPreview[]>([]);
   const [chunkPreviewLoading, setChunkPreviewLoading] = useState(false);
 
-  // Fix #9: sequence counter to ignore stale responses from selectConversation
   const selectConversationSeqRef = React.useRef(0);
+  const documentDataSeqRef = React.useRef(0);
+  const activeDocumentIdRef = React.useRef(state.activeDocumentId);
+  activeDocumentIdRef.current = state.activeDocumentId;
 
   const refreshDocuments = useCallback(async () => {
     if (!auth.clientSessionId) return;
@@ -94,10 +96,8 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
       const nextDocuments = await listDocuments(auth);
       setDocuments(nextDocuments);
       setDocumentsError(null);
-      if (
-        state.activeDocumentId &&
-        !nextDocuments.some((document) => document.id === state.activeDocumentId)
-      ) {
+      const activeId = activeDocumentIdRef.current;
+      if (activeId && !nextDocuments.some((document) => document.id === activeId)) {
         dispatch({ type: "SET_ACTIVE_DOCUMENT", payload: null });
         setConversations([]);
         setMessages([]);
@@ -110,11 +110,12 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
     } finally {
       setDocumentsLoading(false);
     }
-  }, [auth, dispatch, state.activeDocumentId]);
+  }, [auth, dispatch]);
 
   const refreshConversations = useCallback(
     async (documentId?: string | null) => {
-      const target = documentId ?? state.activeDocumentId;
+      const target = documentId ?? activeDocumentIdRef.current;
+      const seq = documentDataSeqRef.current;
       if (!auth.clientSessionId || !target) {
         setConversations([]);
         return;
@@ -122,24 +123,30 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
       setConversationsLoading(true);
       try {
         const nextConversations = await listConversations(auth, target);
+        if (seq !== documentDataSeqRef.current) return;
+        if (target !== activeDocumentIdRef.current) return;
         setConversations(nextConversations);
         setConversationsError(null);
       } catch (error) {
+        if (seq !== documentDataSeqRef.current) return;
         setConversationsError(
           error instanceof Error
             ? error.message
             : "Unable to load conversations."
         );
       } finally {
-        setConversationsLoading(false);
+        if (seq === documentDataSeqRef.current) {
+          setConversationsLoading(false);
+        }
       }
     },
-    [auth, state.activeDocumentId]
+    [auth]
   );
 
   const refreshChunkPreview = useCallback(
     async (documentId?: string | null) => {
-      const target = documentId ?? state.activeDocumentId;
+      const target = documentId ?? activeDocumentIdRef.current;
+      const seq = documentDataSeqRef.current;
       if (!auth.clientSessionId || !target) {
         setChunkPreview([]);
         return;
@@ -147,18 +154,25 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
       setChunkPreviewLoading(true);
       try {
         const nextPreview = await getDocumentChunks(auth, target);
+        if (seq !== documentDataSeqRef.current) return;
+        if (target !== activeDocumentIdRef.current) return;
         setChunkPreview(nextPreview);
       } catch {
+        if (seq !== documentDataSeqRef.current) return;
         setChunkPreview([]);
       } finally {
-        setChunkPreviewLoading(false);
+        if (seq === documentDataSeqRef.current) {
+          setChunkPreviewLoading(false);
+        }
       }
     },
-    [auth, state.activeDocumentId]
+    [auth]
   );
 
   const selectDocument = useCallback(
     async (documentId: string | null) => {
+      selectConversationSeqRef.current += 1;
+      documentDataSeqRef.current += 1;
       dispatch({ type: "SET_ACTIVE_DOCUMENT", payload: documentId });
       dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: null });
       setMessages([]);
@@ -244,15 +258,18 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (state.authLoading) return;
+    selectConversationSeqRef.current += 1;
+    documentDataSeqRef.current += 1;
+    setConversations([]);
+    setMessages([]);
+    setChunkPreview([]);
+    // Drop the previous identity's document list too. Leaving it in place kept
+    // the prior account's documents on screen until refreshDocuments resolved.
+    setDocuments([]);
     if (!auth.clientSessionId) return;
     void refreshDocuments();
-  }, [auth.clientSessionId, refreshDocuments]);
-
-  // Refresh documents when user logs in (owner_id changes from anon to user)
-  useEffect(() => {
-    if (!auth.clientSessionId || !state.currentUser) return;
-    void refreshDocuments();
-  }, [state.currentUser, state.currentUser?.id, auth.clientSessionId, refreshDocuments]);
+  }, [state.authLoading, state.currentUser?.id, auth.clientSessionId, refreshDocuments]);
 
   useEffect(() => {
     if (!documents.some((document) => ["queued", "processing"].includes(document.status))) {

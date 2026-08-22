@@ -49,6 +49,7 @@ import { useServerState } from "../lib/server-state";
 import { useStore } from "../lib/store";
 import { useWorkspaceRole } from "../lib/use-workspace-role";
 import { EASE_OUT, transitionFast } from "../lib/motion";
+import { useToast } from "./Toast";
 
 interface ChatAreaProps {
   onUploadClick: () => void;
@@ -78,9 +79,11 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
     appendToMessage,
     refreshConversations,
     selectConversation,
+    setMessages,
     updateMessageSources,
     updateMessageId,
   } = useServerState();
+  const { toast } = useToast();
   const { settings, activeConversationId, activeDocumentId, activeDocumentIds, activeWorkspaceId, sidebarOpen } = state;
   const [chatMode, setChatMode] = useState<ChatMode>("ask");
   const [savingMessageId, setSavingMessageId] = useState<string | null>(null);
@@ -119,8 +122,9 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // [FIX 5.2] generation counter — stream callbacks from superseded turns are dropped.
   const streamGenRef = useRef(0);
+  const streamingRef = useRef(false);
+  const streamConversationRef = useRef<string | null>(null);
 
   // [FIX 5.7] Stick-to-bottom scrolling. ``stickyRef`` mirrors the user's
   // scroll position without re-rendering; ``isSticky`` only drives the
@@ -195,19 +199,29 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           message_id: message.id,
           artifact_type: "saved_answer",
         });
+        toast({ variant: "success", title: "Saved to workspace" });
       } catch (saveError) {
-        console.error("save_to_workspace_failed", saveError);
+        toast({
+          variant: "error",
+          title: "Could not save answer",
+          description: saveError instanceof Error ? saveError.message : "Please try again.",
+        });
       } finally {
         setSavingMessageId(null);
       }
     },
-    [auth, activeWorkspaceId]
+    [auth, activeWorkspaceId, toast]
   );
 
   const handleFeedback = useCallback(
     async (message: Message, rating: FeedbackRating) => {
       const conversationId = activeConversationIdRef.current;
-      if (!conversationId || !message.id || message.role !== "assistant") {
+      if (
+        !conversationId ||
+        !message.id ||
+        message.role !== "assistant" ||
+        message.id.startsWith("temp-")
+      ) {
         return;
       }
       setFeedbackState((prev) => ({ ...prev, [message.id]: "pending" }));
@@ -280,19 +294,35 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
   }, [question]);
 
   const sendPrompt = useCallback(
-    async (prompt: string) => {
-      if (!activeDocumentId || !prompt.trim() || streaming) return;
+    async (prompt: string, options?: { replaceFailedTurn?: boolean }) => {
+      if (!activeDocumentId || !prompt.trim() || streamingRef.current) return;
 
+      if (options?.replaceFailedTurn) {
+        setMessages((current) => {
+          const last = current[current.length - 1];
+          const prev = current[current.length - 2];
+          if (last?.role === "assistant" && prev?.role === "user" && prev.content === prompt) {
+            return current.slice(0, -2);
+          }
+          return current;
+        });
+      }
+
+      streamingRef.current = true;
       setError(null);
       setErrorRetry(null);
       setCurrentSources([]);
       setLastHint(null);
       setStreaming(true);
 
-      // [FIX 5.2] Every send bumps a generation counter; stream callbacks
-      // drop events that don't belong to the current generation, and all
-      // mutations target this turn's assistant id — never "the last message".
       const gen = ++streamGenRef.current;
+      // Read the conversation id from the ref, not the captured closure value.
+      // The retry thunk installed below re-invokes *this* closure instance, so
+      // on the conversation-creating turn the captured `activeConversationId`
+      // stays null even after onSources dispatched the real id — the retry then
+      // sent conversation_id: null and the mismatch guard aborted it silently.
+      const startConversationId = activeConversationIdRef.current;
+      streamConversationRef.current = startConversationId;
       const uid = () =>
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
@@ -328,7 +358,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         ]);
       };
 
-      let activeConversation = activeConversationId;
+      let activeConversation = startConversationId;
       let streamError: Error | null = null;
       let streamClean = false;
 
@@ -339,7 +369,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           settings.chatModel,
           activeDocumentId,
           prompt,
-          activeConversationId,
+          startConversationId,
           {
             onSources: (payload) => {
               if (gen !== streamGenRef.current) return;
@@ -349,7 +379,11 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
               setLastHint((payload.stages?.active_learning_hint as ActiveLearningHint | undefined) ?? null);
               updateMessageSources(assistantId, payload.sources);
               activeConversation = payload.conversation_id;
-              dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: payload.conversation_id });
+              const current = activeConversationIdRef.current;
+              if (current === null || current === payload.conversation_id) {
+                streamConversationRef.current = payload.conversation_id;
+                dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: payload.conversation_id });
+              }
             },
             onToken: (delta) => {
               if (gen !== streamGenRef.current) return;
@@ -371,10 +405,12 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
               }
             },
             onDone: () => {
+              if (gen !== streamGenRef.current) return;
               appendEvent("done");
               setLastLatencyMs(performance.now() - startedAt);
             },
             onError: (payload) => {
+              if (gen !== streamGenRef.current) return;
               appendEvent("server_error", payload.code);
               streamError = new Error(payload.error || "Chat failed");
             },
@@ -395,20 +431,21 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         if (streamError) throw streamError;
         streamClean = true;
       } catch (err) {
-        // [FIX 5.1] Never slice off the streamed assistant turn — on abort we
-        // keep the partial answer as-is (streaming flips false in the finally
-        // block, marking it complete), and on real errors we keep the partial
-        // text and surface the ErrorBanner instead of deleting the turn.
         const aborted = err instanceof DOMException && err.name === "AbortError";
-        if (!aborted) {
+        if (!aborted && gen === streamGenRef.current) {
           setError(err instanceof Error ? err.message : "Request failed.");
           setErrorRetry(() => () => {
-            void sendPrompt(prompt);
+            void sendPrompt(prompt, { replaceFailedTurn: true });
           });
         }
       } finally {
-        setStreaming(false);
-        abortRef.current = null;
+        if (streamGenRef.current === gen) {
+          streamingRef.current = false;
+          setStreaming(false);
+          if (abortRef.current === controller) {
+            abortRef.current = null;
+          }
+        }
       }
 
       // [FIX 5.1] The conversation refresh moved out of the stream's
@@ -423,7 +460,9 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       }
     },
     [
-      activeConversationId,
+      // activeConversationId is deliberately absent: the conversation id is read
+      // from activeConversationIdRef so the retry thunk (which re-invokes this
+      // closure) always sees the live value rather than a stale capture.
       activeDocumentId,
       activeDocumentIds,
       activeWorkspaceId,
@@ -434,7 +473,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       selectedSourceIds,
       dispatch,
       refreshConversations,
-      streaming,
+      setMessages,
       settings.chatModel,
       settings.provider,
       settings.topK,
@@ -457,11 +496,9 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
 
   const handleRerun = useCallback(
     async (message: Message) => {
-      // [FIX 5.6] Never offer/perform a rerun on an unreconciled client-side
-      // temp id — the backend has no such message and the call would 404.
       if (message.id.startsWith("temp-")) return;
       if (
-        streaming ||
+        streamingRef.current ||
         !activeDocumentId ||
         !activeConversationId ||
         !settings.providerApiKey.trim() ||
@@ -469,6 +506,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       ) {
         return;
       }
+      streamingRef.current = true;
       setError(null);
       setErrorRetry(null);
       setCurrentSources([]);
@@ -494,6 +532,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           void handleRerun(message);
         });
       } finally {
+        streamingRef.current = false;
         setStreaming(false);
         setRerunningMessageId(null);
       }
@@ -510,7 +549,6 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       settings.providerApiKey,
       settings.topK,
       settings.similarityThreshold,
-      streaming,
     ]
   );
 
@@ -528,10 +566,24 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
     }
   }, [activeDocumentId, auth, settings.providerApiKey, settings.embeddingModel]);
 
-  const stopStreaming = () => {
+  const stopStreaming = useCallback(() => {
+    streamGenRef.current += 1;
     abortRef.current?.abort();
+    abortRef.current = null;
+    streamingRef.current = false;
     setStreaming(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!streaming) return;
+    if (messages.length === 0) {
+      stopStreaming();
+      return;
+    }
+    if (activeConversationId !== streamConversationRef.current) {
+      stopStreaming();
+    }
+  }, [activeConversationId, messages.length, streaming, stopStreaming]);
 
   const renderEmptyState = () => {
     if (!settings.providerApiKey.trim()) {
@@ -954,7 +1006,9 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
                           idx === messages.length - 1
                         }
                         onFeedback={
-                          message.role === "assistant" && activeConversationId
+                          message.role === "assistant" &&
+                          activeConversationId &&
+                          !message.id.startsWith("temp-")
                             ? handleFeedback
                             : undefined
                         }

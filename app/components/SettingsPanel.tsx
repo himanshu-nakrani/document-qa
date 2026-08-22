@@ -94,6 +94,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     if (!open || !auth.providerApiKey.trim()) {
       setModels(null);
       setModelsError(false);
+      // Also drop the spinner: if a fetch was in flight, its `finally` is
+      // skipped by the `cancelled` guard, so without this the "Loading models…"
+      // hint stuck on forever.
+      setModelsLoading(false);
       return;
     }
     let cancelled = false;
@@ -124,7 +128,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     { value: "gemini", label: "Google Gemini", icon: "G" },
   ];
 
-  const activeAccentPack = LEGACY_PACK_ALIASES[settings.accentPack] ?? "lime";
+  const resolvedAccent = LEGACY_PACK_ALIASES[settings.accentPack] ?? settings.accentPack;
+  const activeAccentPack =
+    resolvedAccent === "lime" || resolvedAccent === "pulse" || resolvedAccent === "beam"
+      ? resolvedAccent
+      : "lime";
 
   const handleSignOut = async () => {
     try {
@@ -135,6 +143,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       clearStoredAuthToken();
     } finally {
       dispatch({ type: "SET_CURRENT_USER", payload: null });
+      // Drop the BYOK provider key on sign-out. sessionStorage outlives the
+      // sign-out within a tab, so without this the next person to sign in on a
+      // shared browser inherits the previous user's provider credentials.
+      dispatch({ type: "SET_SETTINGS", payload: { providerApiKey: "" } });
     }
   };
 

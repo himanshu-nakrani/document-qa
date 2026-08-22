@@ -5,7 +5,9 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 
 import type { AuthUser } from "../lib/api";
+import { startGoogleOAuth } from "../lib/oauth";
 import { staggerContainer, staggerItem } from "../lib/motion";
+import OAuthCallback from "./OAuthCallback";
 import { Button, ErrorBanner, TextField } from "./ui";
 
 /** Google brand mark — third-party logo colors, kept as-is. */
@@ -77,27 +79,18 @@ export default function AuthForm({
     };
   }, []);
 
-  /* ---- handle Google OAuth redirect back (?code=...) ---- */
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    if (!code) return;
+  const handleOAuthAuthenticated = React.useCallback(
+    (user: AuthUser) => {
+      setError(null);
+      setLoading(false);
+      onAuthenticatedRef.current(user);
+    },
+    [],
+  );
 
-    // Clean URL immediately
-    window.history.replaceState({}, "", window.location.pathname);
-
-    setLoading(true);
-    const redirectUri = `${window.location.origin}${window.location.pathname}`;
-    import("../lib/api")
-      .then((api) => api.googleLogin(code, redirectUri))
-      .then((user) => {
-        setError(null);
-        onAuthenticatedRef.current(user);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : "Google sign-in failed.");
-      })
-      .finally(() => setLoading(false));
+  const handleOAuthError = React.useCallback((message: string) => {
+    setLoading(false);
+    setError(message);
   }, []);
 
   const submit = async (event: React.FormEvent) => {
@@ -121,17 +114,10 @@ export default function AuthForm({
 
   const handleGoogleSignIn = () => {
     if (!googleClientId || loading) return;
-    const redirectUri = `${window.location.origin}${window.location.pathname}`;
-    const scope = "openid email profile";
-    const url =
-      `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${encodeURIComponent(googleClientId)}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&response_type=code` +
-      `&scope=${encodeURIComponent(scope)}` +
-      `&access_type=offline` +
-      `&prompt=consent`;
-    window.location.href = url;
+    setError(null);
+    if (!startGoogleOAuth(googleClientId)) {
+      setError("Could not start Google sign-in in this browser.");
+    }
   };
 
   return (
@@ -143,6 +129,7 @@ export default function AuthForm({
         boxShadow: "var(--shadow-md)",
       }}
     >
+      <OAuthCallback onAuthenticated={handleOAuthAuthenticated} onError={handleOAuthError} />
       <motion.div
         variants={staggerContainer}
         initial="hidden"
@@ -161,10 +148,14 @@ export default function AuthForm({
           </button>
         ) : null}
 
-        {/* Segmented mode control — disabled while submitting (Fix 6.7.1) */}
+        {/* Segmented mode control — disabled while submitting (Fix 6.7.1).
+            Uses aria-pressed toggle buttons rather than role="tablist"/"tab":
+            there is no tabpanel and no aria-controls target here, and the ARIA
+            tab pattern also mandates arrow-key navigation that this control
+            does not implement. A pressed-button group is the honest role. */}
         <motion.div
           variants={staggerItem}
-          role="tablist"
+          role="group"
           aria-label="Authentication mode"
           className="grid grid-cols-2 gap-1 rounded-lg p-1"
           style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
@@ -175,8 +166,7 @@ export default function AuthForm({
               <button
                 key={tab}
                 type="button"
-                role="tab"
-                aria-selected={active}
+                aria-pressed={active}
                 disabled={loading}
                 onClick={() => setMode(tab)}
                 className="rounded-md px-4 py-1.5 text-[13px] font-medium transition-colors focus-ring disabled:cursor-not-allowed"

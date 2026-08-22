@@ -279,7 +279,6 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
       setRenameOpen(false);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Unable to rename conversation.");
-      setRenameOpen(false);
     } finally {
       setRenameBusy(false);
     }
@@ -702,12 +701,10 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                       ) : null}
                     </div>
 
-                    {/* [a11y] Rows are real buttons for keyboard accessibility */}
                     {conversations.map((conversation) => (
-                      <motion.button
-                        type="button"
+                      <motion.div
                         key={conversation.id}
-                        className="group flex items-center gap-2 px-2 py-1.5 w-full text-left"
+                        className="group flex items-center gap-2 px-2 py-1.5 w-full"
                         style={{
                           background:
                             activeConversationId === conversation.id
@@ -715,49 +712,41 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
                               : "transparent",
                           borderRadius: "var(--radius-sm)",
                         }}
-                        onClick={() => void selectConversation(conversation.id)}
                         whileHover={{ background: "var(--bg-surface)" }}
                         transition={transitionFast}
                       >
-                        <MessageSquare
-                          size={10}
-                          style={{ color: "var(--text-muted)", flexShrink: 0 }}
-                        />
-                        <span
-                          className="text-[11px] truncate flex-1"
-                          style={{
-                            color:
-                              activeConversationId === conversation.id
-                                ? "var(--text-primary)"
-                                : "var(--text-secondary)",
-                          }}
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                          onClick={() => void selectConversation(conversation.id)}
                         >
-                          {conversation.title}
-                        </span>
-                        {/* [flow] Destructive delete routes through a confirm dialog */}
-                        {/* [a11y] Focus-within reveal keeps the control keyboard-reachable */}
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setDeleteConversationTarget(conversation);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.stopPropagation();
-                              event.preventDefault();
-                              setDeleteConversationTarget(conversation);
-                            }
-                          }}
+                          <MessageSquare
+                            size={10}
+                            style={{ color: "var(--text-muted)", flexShrink: 0 }}
+                          />
+                          <span
+                            className="text-[11px] truncate flex-1"
+                            style={{
+                              color:
+                                activeConversationId === conversation.id
+                                  ? "var(--text-primary)"
+                                  : "var(--text-secondary)",
+                            }}
+                          >
+                            {conversation.title}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConversationTarget(conversation)}
                           className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 p-1 rounded-xs transition-opacity"
                           style={{ color: "var(--text-muted)" }}
                           aria-label="Delete conversation"
                           title="Delete conversation"
                         >
                           <Trash2 size={9} />
-                        </span>
-                      </motion.button>
+                        </button>
+                      </motion.div>
                     ))}
 
                     {document.status === "ready" ? (
@@ -839,9 +828,10 @@ export default function Sidebar({ onUploadClick }: SidebarProps) {
             <Button
               variant="primary"
               size="sm"
-              onClick={() =>
-                dispatch({ type: "SET_ACTIVE_DOCUMENT_IDS", payload: activeDocumentIds })
-              }
+              onClick={() => {
+                dispatch({ type: "SET_ACTIVE_DOCUMENT_IDS", payload: activeDocumentIds });
+                void selectConversation(null);
+              }}
             >
               Chat with <span className="data-num">{multiSelectCount}</span>
             </Button>

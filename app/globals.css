@@ -161,9 +161,9 @@
   --text-muted: #5f6873;
   --text-faint: #d6dce3;
 
-  /* Lime needs darkening on white for text contrast */
-  --accent-primary: #52800a;
-  --accent-primary-hover: #446a00;
+  /* Lime needs darkening on white for text contrast (AA against #f7f8fa) */
+  --accent-primary: #4a7409;
+  --accent-primary-hover: #3d6508;
   --accent-primary-soft: rgba(92, 138, 10, 0.07);
   --accent-primary-glow: rgba(92, 138, 10, 0.1);
 
@@ -259,7 +259,13 @@ body {
   color: var(--text-primary);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
   min-height: 100dvh;
-  overflow: hidden;
+  /* Clamp horizontal overflow but keep the page vertically scrollable. The app
+     shell manages its own scroll containers inside a 100dvh root, so it never
+     produces a body scrollbar; a blanket `overflow: hidden` only clipped the
+     document-flow routes (/login, error, not-found) with no way to reach the
+     rest of the content above 768px. */
+  overflow-x: hidden;
+  overflow-y: auto;
   line-height: 1.6;
   font-size: var(--text-body);
 }
@@ -673,7 +679,6 @@ h1, h2, h3, h4 {
   }
 
   body {
-    overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -740,6 +745,26 @@ h1, h2, h3, h4 {
   --accent: #67e8f9;
   --accent-hover: #4ee0f5;
   --accent-fg: #06232b;
+}
+
+[data-theme="light"][data-accent="pulse"] {
+  --accent-primary: #0e7490;
+  --accent-primary-hover: #155e75;
+  --accent-primary-soft: rgba(14, 116, 144, 0.07);
+  --accent-brand: #0e7490;
+  --accent-brand-hover: #155e75;
+  --focus-ring: rgba(14, 116, 144, 0.4);
+  --focus-ring-strong: rgba(14, 116, 144, 0.7);
+}
+
+[data-theme="light"][data-accent="beam"] {
+  --accent-primary: #b45309;
+  --accent-primary-hover: #92400e;
+  --accent-primary-soft: rgba(180, 83, 9, 0.07);
+  --accent-brand: #b45309;
+  --accent-brand-hover: #92400e;
+  --focus-ring: rgba(180, 83, 9, 0.4);
+  --focus-ring-strong: rgba(180, 83, 9, 0.7);
 }
 
 [data-accent="beam"] {

@@ -71,7 +71,7 @@ export default function RootLayout({
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=localStorage.getItem('rag-prefs');if(p){var d=JSON.parse(p);var r=document.documentElement;if(d.theme==='light')r.setAttribute('data-theme','light');if(d.highContrast)r.setAttribute('data-contrast','high');if(d.reducedMotion)r.setAttribute('data-motion','reduced');if(d.accentPack&&d.accentPack!=='lime')r.setAttribute('data-accent',d.accentPack);}}catch(e){}})();`,
+            __html: `(function(){try{var p=localStorage.getItem('rag-prefs');if(p){var d=JSON.parse(p);var r=document.documentElement;if(d.theme==='light')r.setAttribute('data-theme','light');if(d.highContrast)r.setAttribute('data-contrast','high');if(d.reducedMotion)r.setAttribute('data-motion','reduced');var pack=d.accentPack;if(pack==='emerald')pack='pulse';else if(pack==='amber')pack='beam';else if(pack==='terracotta')pack='lime';if(pack&&pack!=='lime')r.setAttribute('data-accent',pack);}}catch(e){}})();`,
           }}
         />
       </head>

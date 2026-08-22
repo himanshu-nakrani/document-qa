@@ -9,19 +9,22 @@ import { StoreProvider, useStore } from "../lib/store";
 
 /**
  * Auth gate for /login. Renders AuthScreen for anonymous visitors and sends
- * already-authenticated users straight to the app. Mirrors the WelcomeScreen's
- * LoginPrompt behavior of marking setup complete on successful sign-in.
+ * already-authenticated users straight to the app.
+ *
+ * Note: this component deliberately does NOT dispatch SET_SETUP_COMPLETE.
+ * `setupComplete` lives in this route's own StoreProvider, and /dashboard
+ * mounts a separate one, so the flag cannot cross the redirect. The dashboard
+ * exempts authenticated users from the setup gate instead.
  */
 function LoginGate() {
-  const { state, dispatch } = useStore();
+  const { state } = useStore();
   const router = useRouter();
 
   useEffect(() => {
     if (state.currentUser) {
-      dispatch({ type: "SET_SETUP_COMPLETE", payload: true });
       router.replace("/dashboard");
     }
-  }, [state.currentUser, dispatch, router]);
+  }, [state.currentUser, router]);
 
   if (state.authLoading || state.currentUser) {
     return (
