@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Activity, FileSearch, ShieldCheck } from "lucide-react";
 
@@ -103,6 +104,20 @@ export default function AuthScreen() {
         <motion.div variants={staggerItem} className="flex">
           <div className="w-full">
             <AuthForm onAuthenticated={handleAuthenticated} />
+            {/* Sourceful is BYOK and usable without an account (data is scoped
+                to an anonymous client session). `/` redirects here, so without
+                this link the anonymous path would only be reachable by typing
+                the /dashboard URL directly. */}
+            <p className="mt-4 text-center text-xs" style={{ color: "var(--text-tertiary)" }}>
+              <Link
+                href="/dashboard"
+                className="rounded focus-ring underline underline-offset-2"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Continue without an account
+              </Link>{" "}
+              — bring your own API key, data stays in this browser session.
+            </p>
           </div>
         </motion.div>
       </motion.div>

@@ -467,6 +467,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     prevUserIdRef.current = currentUserId;
     if (isInitialAnonymous) return;
     clearRoleCache();
+    // Clear the previous identity's workspace list as well as the selection —
+    // leaving `workspaces` populated kept the old account's names in the
+    // switcher until listWorkspaces resolved for the new identity.
+    dispatch({ type: "SET_WORKSPACES", payload: [] });
     dispatch({ type: "SET_ACTIVE_WORKSPACE", payload: null });
     dispatch({ type: "SET_ACTIVE_DOCUMENT", payload: null });
     dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: null });

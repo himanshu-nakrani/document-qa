@@ -111,7 +111,7 @@ The repository evolved from a Streamlit prototype (`legacy/`) into a **split-sta
 
 | View | Path | Description |
 |------|------|-------------|
-| Marketing landing | `/` | Feature overview (`app/(marketing)/page.tsx`) |
+| Sign in | `/login` | Auth screen; `/` redirects here. Offers "Continue without an account" for BYOK use |
 | Dashboard | `/dashboard` | Upload, chat, workspaces, settings |
 | Notebook | `/documents/{id}/notebook` | PDF + cited chat side-by-side |
 
@@ -261,7 +261,7 @@ flowchart LR
 ```
 sourceful/
 ├── app/                          # Next.js App Router (frontend)
-│   ├── (marketing)/              # Public landing page
+│   ├── login/                    # Auth screen (`/` redirects here)
 │   ├── dashboard/                # Main authenticated app shell
 │   ├── documents/[id]/notebook/  # Split-pane PDF + chat
 │   ├── components/               # UI: ChatArea, Sidebar, workspaces, etc.
@@ -964,7 +964,7 @@ CI runs on push/PR to `main` ([`.github/workflows/ci.yml`](./.github/workflows/c
 - Wire `share_links` and `usage_records` to UI + enforcement middleware
 - Optional OIDC / SSO beyond Google OAuth
 - Document-level access ACLs within shared workspaces
-- OCR / layout-aware extraction (marketing page references Docling — evaluate integration)
+- OCR / layout-aware extraction (evaluate Docling integration)
 - Helm chart or Terraform module for cloud deployment
 
 ---

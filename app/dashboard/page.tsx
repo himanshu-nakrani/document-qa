@@ -50,8 +50,14 @@ function AppShell() {
   const [dropFile, setDropFile] = useState<File | null>(null);
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
 
-  // Show welcome screen if setup not complete and no API key
-  const needsSetup = !state.setupComplete && !state.settings.providerApiKey.trim();
+  // Show the welcome/setup screen only for anonymous visitors who have not
+  // finished setup. Authenticated users are never gated here: `setupComplete`
+  // is in-memory per StoreProvider and `/login` mounts its own provider, so a
+  // flag set during sign-in cannot survive the redirect into this route. They
+  // land in the app and ChatArea's own "API Key Required" empty state prompts
+  // for the BYOK key instead.
+  const needsSetup =
+    !state.currentUser && !state.setupComplete && !state.settings.providerApiKey.trim();
 
   const openUpload = useCallback((file?: File) => {
     if (file) setDropFile(file);

@@ -259,7 +259,13 @@ body {
   color: var(--text-primary);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
   min-height: 100dvh;
-  overflow: hidden;
+  /* Clamp horizontal overflow but keep the page vertically scrollable. The app
+     shell manages its own scroll containers inside a 100dvh root, so it never
+     produces a body scrollbar; a blanket `overflow: hidden` only clipped the
+     document-flow routes (/login, error, not-found) with no way to reach the
+     rest of the content above 768px. */
+  overflow-x: hidden;
+  overflow-y: auto;
   line-height: 1.6;
   font-size: var(--text-body);
 }
@@ -673,7 +679,6 @@ h1, h2, h3, h4 {
   }
 
   body {
-    overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
 

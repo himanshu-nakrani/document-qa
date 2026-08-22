@@ -264,6 +264,9 @@ export function ServerStateProvider({ children }: { children: ReactNode }) {
     setConversations([]);
     setMessages([]);
     setChunkPreview([]);
+    // Drop the previous identity's document list too. Leaving it in place kept
+    // the prior account's documents on screen until refreshDocuments resolved.
+    setDocuments([]);
     if (!auth.clientSessionId) return;
     void refreshDocuments();
   }, [state.authLoading, state.currentUser?.id, auth.clientSessionId, refreshDocuments]);

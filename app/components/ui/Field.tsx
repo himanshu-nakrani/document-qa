@@ -18,6 +18,7 @@ export const TextField = React.forwardRef<
   ref,
 ) {
   const id = React.useId();
+  const describedById = `${id}-desc`;
   return (
     <div className={className} style={style}>
       <label htmlFor={id} className="block text-[13px] mb-1.5" style={{ color: "var(--text-secondary)" }}>
@@ -34,14 +35,17 @@ export const TextField = React.forwardRef<
           fontFamily: mono ? "var(--font-mono), monospace" : undefined,
         }}
         aria-invalid={error ? true : undefined}
+        // Associate whichever of error/hint is rendered, so screen readers
+        // announce it with the field instead of leaving it orphaned.
+        aria-describedby={error || hint ? describedById : undefined}
         {...rest}
       />
       {error ? (
-        <p className="mt-1.5 text-xs" style={{ color: "var(--error)" }} role="alert">
+        <p id={describedById} className="mt-1.5 text-xs" style={{ color: "var(--error)" }} role="alert">
           {error}
         </p>
       ) : hint ? (
-        <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
+        <p id={describedById} className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
           {hint}
         </p>
       ) : null}
@@ -65,6 +69,7 @@ export function SelectField({
   options: { value: string; label: string }[];
 } & React.SelectHTMLAttributes<HTMLSelectElement>) {
   const id = React.useId();
+  const hintId = `${id}-desc`;
   return (
     <div className={className} style={style}>
       <label htmlFor={id} className="block text-[13px] mb-1.5" style={{ color: "var(--text-secondary)" }}>
@@ -78,6 +83,7 @@ export function SelectField({
           border: "1px solid var(--border)",
           color: "var(--text-primary)",
         }}
+        aria-describedby={hint ? hintId : undefined}
         {...rest}
       >
         {options.map((opt) => (
@@ -87,7 +93,7 @@ export function SelectField({
         ))}
       </select>
       {hint ? (
-        <p className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
+        <p id={hintId} className="mt-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
           {hint}
         </p>
       ) : null}

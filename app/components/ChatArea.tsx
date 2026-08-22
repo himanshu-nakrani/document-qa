@@ -316,7 +316,13 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       setStreaming(true);
 
       const gen = ++streamGenRef.current;
-      streamConversationRef.current = activeConversationId;
+      // Read the conversation id from the ref, not the captured closure value.
+      // The retry thunk installed below re-invokes *this* closure instance, so
+      // on the conversation-creating turn the captured `activeConversationId`
+      // stays null even after onSources dispatched the real id — the retry then
+      // sent conversation_id: null and the mismatch guard aborted it silently.
+      const startConversationId = activeConversationIdRef.current;
+      streamConversationRef.current = startConversationId;
       const uid = () =>
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
@@ -352,7 +358,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
         ]);
       };
 
-      let activeConversation = activeConversationId;
+      let activeConversation = startConversationId;
       let streamError: Error | null = null;
       let streamClean = false;
 
@@ -363,7 +369,7 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
           settings.chatModel,
           activeDocumentId,
           prompt,
-          activeConversationId,
+          startConversationId,
           {
             onSources: (payload) => {
               if (gen !== streamGenRef.current) return;
@@ -454,7 +460,9 @@ export default function ChatArea({ onUploadClick }: ChatAreaProps) {
       }
     },
     [
-      activeConversationId,
+      // activeConversationId is deliberately absent: the conversation id is read
+      // from activeConversationIdRef so the retry thunk (which re-invokes this
+      // closure) always sees the live value rather than a stale capture.
       activeDocumentId,
       activeDocumentIds,
       activeWorkspaceId,

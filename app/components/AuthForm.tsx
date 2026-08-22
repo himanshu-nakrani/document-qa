@@ -148,10 +148,14 @@ export default function AuthForm({
           </button>
         ) : null}
 
-        {/* Segmented mode control — disabled while submitting (Fix 6.7.1) */}
+        {/* Segmented mode control — disabled while submitting (Fix 6.7.1).
+            Uses aria-pressed toggle buttons rather than role="tablist"/"tab":
+            there is no tabpanel and no aria-controls target here, and the ARIA
+            tab pattern also mandates arrow-key navigation that this control
+            does not implement. A pressed-button group is the honest role. */}
         <motion.div
           variants={staggerItem}
-          role="tablist"
+          role="group"
           aria-label="Authentication mode"
           className="grid grid-cols-2 gap-1 rounded-lg p-1"
           style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
@@ -162,8 +166,7 @@ export default function AuthForm({
               <button
                 key={tab}
                 type="button"
-                role="tab"
-                aria-selected={active}
+                aria-pressed={active}
                 disabled={loading}
                 onClick={() => setMode(tab)}
                 className="rounded-md px-4 py-1.5 text-[13px] font-medium transition-colors focus-ring disabled:cursor-not-allowed"

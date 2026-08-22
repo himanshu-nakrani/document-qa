@@ -1,5 +1,19 @@
 const STORAGE_KEY = "rag-oauth-state";
 
+/**
+ * The single path Google redirects back to. Pinned rather than derived from
+ * `window.location.pathname`, which produced a different redirect URI for every
+ * route that renders the auth form (`/login`, `/dashboard`, anywhere
+ * SettingsPanel opens) — each one needing its own entry in the Google console,
+ * and failing at Google if unregistered.
+ *
+ * `/dashboard` is the deliberate choice: it predates the `/login` route, so it
+ * is the URI existing deployments already have registered, and it is where a
+ * successful sign-in should land anyway. `OAuthCallback` is mounted there (and
+ * inside AuthForm), so the callback is handled wherever sign-in began.
+ */
+const REDIRECT_PATH = "/dashboard";
+
 export type OAuthConsumeResult =
   | { kind: "none" }
   | { kind: "error"; message: string }
@@ -16,6 +30,14 @@ function randomState(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
+  // `randomUUID` needs a secure context; `getRandomValues` does not. Prefer it
+  // over Math.random so the CSRF token stays cryptographically random on
+  // http:// origins (common for self-hosted LAN deployments).
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
@@ -25,7 +47,7 @@ function randomState(): string {
  */
 export function startGoogleOAuth(clientId: string): boolean {
   const state = randomState();
-  const redirectUri = `${window.location.origin}${window.location.pathname}`;
+  const redirectUri = `${window.location.origin}${REDIRECT_PATH}`;
   try {
     const payload: StoredOAuthState = { state, redirectUri };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -56,7 +78,8 @@ export function consumeGoogleOAuthCallback(): OAuthConsumeResult {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
   const state = params.get("state");
-  if (!code && !state) {
+  const oauthError = params.get("error");
+  if (!code && !state && !oauthError) {
     return { kind: "none" };
   }
 
@@ -74,6 +97,19 @@ export function consumeGoogleOAuthCallback(): OAuthConsumeResult {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
     // ignore
+  }
+
+  // Google reports a declined consent screen as ?error=access_denied. Surface
+  // that as its own message instead of the generic verification failure, which
+  // wrongly implied something was tampered with.
+  if (oauthError) {
+    return {
+      kind: "error",
+      message:
+        oauthError === "access_denied"
+          ? "Google sign-in was cancelled."
+          : `Google sign-in failed (${oauthError}).`,
+    };
   }
 
   if (!code || !state || !saved?.state || !saved.redirectUri || saved.state !== state) {
