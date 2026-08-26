@@ -19,8 +19,8 @@ from backend.models import (
     StructuredExtractResponse,
 )
 from backend.routers.deps import RequestContext, get_request_context
-from backend.services.provider_auth import MissingProviderApiKeyError
 from backend.services.jobs import enqueue_reprocess_job
+from backend.services.provider_auth import MissingProviderApiKeyError
 from backend.services.vectorstore import preview_chunks
 
 router = APIRouter()

@@ -83,7 +83,6 @@ class SourceAdapter(ABC):
         Raises:
             SourceFetchError: If fetching fails
         """
-        pass
 
     @abstractmethod
     async def sync(self, source_url: str, last_checksum: str | None = None, **kwargs: Any) -> SyncResult:
@@ -100,17 +99,14 @@ class SourceAdapter(ABC):
         Raises:
             SourceFetchError: If syncing fails
         """
-        pass
 
     @abstractmethod
     def get_adapter_type(self) -> str:
         """Return the adapter type identifier (e.g., 'url', 'file', 'confluence')."""
-        pass
 
     @abstractmethod
     def supports_resync(self) -> bool:
         """Return True if this adapter supports resync operations."""
-        pass
 
 
 class SourceFetchError(Exception):
@@ -142,7 +138,9 @@ class UrlSourceAdapter(SourceAdapter):
     async def fetch(self, source_url: str, **kwargs: Any) -> SourceContent:
         """Fetch content from a URL."""
         import hashlib
+
         import httpx
+
         from backend.utils.network import prevent_ssrf_hook
 
         async def _prevent_ssrf_hook_with_error(request: httpx.Request) -> None:

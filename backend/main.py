@@ -8,12 +8,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from backend.auth import ensure_default_superuser
-from backend.database import close_db, fetch_one, init_db, record_heartbeat, require_current_schema
+from backend.database import (
+    close_db,
+    fetch_one,
+    init_db,
+    record_heartbeat,
+    require_current_schema,
+)
 from backend.errors import api_error_payload
 from backend.logging_utils import configure_logging
 from backend.metrics import metrics
-from backend.middleware import RateLimitMiddleware, RequestIdMiddleware, RequestLoggingMiddleware, SecurityHeadersMiddleware
-from backend.routers import analytics, artifacts, auth, chat, conversations, documents, feedback, ingest, models, users, workspaces
+from backend.middleware import (
+    RateLimitMiddleware,
+    RequestIdMiddleware,
+    RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
+)
+from backend.routers import (
+    analytics,
+    artifacts,
+    auth,
+    chat,
+    conversations,
+    documents,
+    feedback,
+    ingest,
+    models,
+    users,
+    workspaces,
+)
 from backend.routers import jobs as jobs_router
 from backend.settings import settings
 

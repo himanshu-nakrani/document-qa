@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 from backend.services.vectorstore import RetrievedChunk
 
@@ -108,8 +108,7 @@ def mmr(
         for idx, cand in enumerate(remaining):
             # We only need to check similarity with the most recently added chunk
             sim = similarity(cand, last_selected)
-            if sim > max_sim_to_selected[cand.chunk_id]:
-                max_sim_to_selected[cand.chunk_id] = sim
+            max_sim_to_selected[cand.chunk_id] = max(max_sim_to_selected[cand.chunk_id], sim)
 
             sim_to_selected = max_sim_to_selected[cand.chunk_id]
             score = lam * relevance[cand.chunk_id] - (1.0 - lam) * sim_to_selected

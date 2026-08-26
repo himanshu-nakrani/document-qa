@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator
+from typing import Any
 
 from backend.connectors.base import (
     BaseConnector,
@@ -37,6 +38,7 @@ class NotionConnector(BaseConnector):
 
         try:
             import httpx
+
             from backend.utils.network import get_ssrf_event_hooks
         except ImportError:
             raise RuntimeError("httpx not installed")
@@ -62,6 +64,7 @@ class NotionConnector(BaseConnector):
 
         try:
             import httpx
+
             from backend.utils.network import get_ssrf_event_hooks
         except ImportError:
             raise RuntimeError("httpx not installed")
@@ -156,6 +159,7 @@ class NotionConnector(BaseConnector):
 
         try:
             import httpx
+
             from backend.utils.network import get_ssrf_event_hooks
         except ImportError:
             raise RuntimeError("httpx not installed")

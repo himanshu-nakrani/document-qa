@@ -13,7 +13,6 @@ Covers:
 
 from __future__ import annotations
 
-
 HEADERS_A = {"X-Client-Session": "workspace-tester-A"}
 HEADERS_B = {"X-Client-Session": "workspace-tester-B"}
 PROVIDER_HEADERS_A = {**HEADERS_A, "X-Provider-Api-Key": "test-provider-key"}

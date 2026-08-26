@@ -8,7 +8,6 @@ from typing import Any
 from backend.database import execute, fetch_all, fetch_one
 from backend.settings import settings
 
-
 TIMESTAMP_SQL = "NOW()" if settings.using_postgres else "CURRENT_TIMESTAMP"
 
 

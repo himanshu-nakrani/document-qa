@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from backend.database import execute, execute_returning, fetch_all, fetch_one
 from backend.metrics import metrics
-from backend.services.chunking import chunk_sections, chunk_sections_parent_child, chunk_sections_semantic
+from backend.services.chunking import (
+    chunk_sections,
+    chunk_sections_parent_child,
+    chunk_sections_semantic,
+)
 from backend.services.embeddings import embed_texts
 from backend.services.extract import extract_document
 from backend.services.provider_auth import require_provider_api_key
@@ -300,7 +304,7 @@ async def process_job(job: dict) -> None:
                     ctx_stats.get("enriched", 0),
                     ctx_stats.get("skipped", 0),
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("contextual_enrichment_failed")
 
         table_count = sum(1 for c in chunks if c.chunk_type == 'table')
@@ -657,7 +661,7 @@ async def _maybe_build_graph(job: dict, chunks) -> None:
             persist_counts.get("relations", 0),
             community_counts.get("communities", 0),
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         # A graph-build failure must never block document readiness.
         logger.exception("graph_ingest_failed document_id=%s", document_id)
 

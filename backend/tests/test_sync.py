@@ -18,7 +18,7 @@ async def test_url_adapter_fetch_content(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_url_adapter_sync_detects_changes(client: AsyncClient):
     """Verify that URL sync detects when content has changed."""
-    from backend.connectors.adapter import UrlSourceAdapter, SourceFetchError
+    from backend.connectors.adapter import SourceFetchError, UrlSourceAdapter
 
     adapter = UrlSourceAdapter()
 
@@ -86,8 +86,9 @@ async def test_source_metadata_checksum(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_sync_result_change_detection(client: AsyncClient):
     """Verify that sync result correctly reports change status."""
-    from backend.connectors.adapter import SyncResult
     from datetime import datetime
+
+    from backend.connectors.adapter import SyncResult
 
     # Unchanged sync
     unchanged = SyncResult(

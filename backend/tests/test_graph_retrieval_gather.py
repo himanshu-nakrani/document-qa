@@ -1,6 +1,8 @@
+
 import pytest
-import asyncio
+
 from backend.services.graph_retrieval import _fetch_chunks_for_entities
+
 
 @pytest.mark.asyncio
 async def test_fetch_chunks_for_entities_mocked(monkeypatch):

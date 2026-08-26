@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import TypeAdapter
 
 from backend.database import execute, fetch_all, fetch_one
 from backend.errors import api_error_response
-from backend.models import Citation, ConversationListItem, ConversationListResponse, ConversationResponse, MessageResponse, UpdateConversationRequest
+from backend.models import (
+    Citation,
+    ConversationListItem,
+    ConversationListResponse,
+    ConversationResponse,
+    MessageResponse,
+    UpdateConversationRequest,
+)
 from backend.routers.deps import RequestContext, get_request_context
 
 router = APIRouter()

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-
 from openai import AsyncOpenAI
 
 from backend.services.vectorstore import RetrievedChunk
 from backend.settings import settings
-
 
 SYSTEM_PROMPT = (
     "You are a careful document assistant. Answer only from the provided document excerpts. "

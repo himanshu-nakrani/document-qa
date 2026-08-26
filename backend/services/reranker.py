@@ -26,10 +26,9 @@ from dataclasses import replace
 
 import httpx
 
-from backend.utils.network import get_ssrf_event_hooks
-
 from backend.services.vectorstore import RetrievedChunk
 from backend.settings import settings
+from backend.utils.network import get_ssrf_event_hooks
 
 logger = logging.getLogger("ragapp.reranker")
 

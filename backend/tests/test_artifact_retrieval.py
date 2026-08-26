@@ -13,7 +13,6 @@ from backend.services import artifact_retrieval
 from backend.services.llm import build_rag_prompt
 from backend.services.vectorstore import RetrievedChunk
 
-
 HEADERS = {"X-Client-Session": "ph2-retrieval"}
 OWNER = f"anon:{HEADERS['X-Client-Session']}"
 

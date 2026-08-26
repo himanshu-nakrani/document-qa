@@ -20,11 +20,11 @@ from urllib.parse import urlparse
 import httpx
 
 from backend.database import fetch_one
-from backend.utils.network import prevent_ssrf_hook
 from backend.services import workspace_service
 from backend.services.jobs import enqueue_ingest_job
 from backend.services.provider_auth import provider_requires_api_key
 from backend.settings import settings
+from backend.utils.network import prevent_ssrf_hook
 
 logger = logging.getLogger("ragapp.url_ingest")
 

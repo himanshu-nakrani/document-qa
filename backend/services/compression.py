@@ -21,8 +21,8 @@ from __future__ import annotations
 import logging
 import math
 import re
+from collections.abc import Iterable
 from dataclasses import replace
-from typing import Iterable
 
 from backend.services.vectorstore import RetrievedChunk
 

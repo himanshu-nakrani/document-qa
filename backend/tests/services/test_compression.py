@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-
 from backend.services.compression import (
-    compress_chunks,
     _approx_tokens,
-    _split_sentences,
     _heuristic_compress_chunk,
+    _split_sentences,
+    compress_chunks,
 )
 from backend.services.vectorstore import RetrievedChunk
 

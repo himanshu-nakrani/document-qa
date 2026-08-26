@@ -15,16 +15,16 @@ from __future__ import annotations
 
 import pytest
 
-from backend.services.extract import (
-    ExtractedSection,
-    extract_document,
-    FileValidationError,
-    validate_upload,
-)
 from backend.services.chunking import (
     ChunkPayload,
     chunk_sections,
     chunk_sections_semantic,
+)
+from backend.services.extract import (
+    ExtractedSection,
+    FileValidationError,
+    extract_document,
+    validate_upload,
 )
 
 
@@ -139,6 +139,7 @@ class TestExtraction:
     )
     def test_xlsx_extraction(self):
         import io
+
         from openpyxl import Workbook
 
         wb = Workbook()
@@ -165,6 +166,7 @@ class TestExtraction:
     )
     def test_pptx_extraction(self):
         import io
+
         from pptx import Presentation
 
         prs = Presentation()

@@ -13,8 +13,9 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
 
 from backend.metrics import metrics
 from backend.settings import settings
@@ -67,7 +68,7 @@ def _get_client():
 class _Span:
     """A single traced span. Always safe to use; metadata is stored lazily."""
 
-    __slots__ = ("name", "metadata", "_started", "_sink", "_handle")
+    __slots__ = ("_handle", "_sink", "_started", "metadata", "name")
 
     def __init__(self, name: str, sink):
         self.name = name

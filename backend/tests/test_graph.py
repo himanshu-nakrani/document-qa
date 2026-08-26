@@ -17,9 +17,8 @@ from __future__ import annotations
 import pytest
 
 from backend.database import fetch_all
-from backend.services import graph
+from backend.services import graph, graph_retrieval
 from backend.services import graph_communities as communities
-from backend.services import graph_retrieval
 
 
 def test_extract_from_text_pulls_proper_nouns():

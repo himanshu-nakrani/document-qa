@@ -5,10 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from fastapi import Depends, Header, HTTPException, Request
+
 from backend.auth import get_user_from_session
-from backend.settings import settings
-from backend.services.provider_auth import normalize_provider_api_key
 from backend.services.anon_scope import anon_owner_id
+from backend.services.provider_auth import normalize_provider_api_key
+from backend.settings import settings
 
 
 @dataclass(slots=True)

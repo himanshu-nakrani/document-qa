@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging  # Added logging
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
-import logging # Added logging
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -1192,11 +1192,10 @@ async def fetch_one(query: str, params: tuple[Any, ...] = ()) -> dict[str, Any] 
     await init_db()
     if settings.using_postgres:
         assert _pg_pool is not None
-        async with _pg_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(_sql(query), params)
-                row = await cur.fetchone()
-                return dict(row) if row else None
+        async with _pg_pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(_sql(query), params)
+            row = await cur.fetchone()
+            return dict(row) if row else None
 
     assert _sqlite is not None
     cursor = await _sqlite.execute(query, params)
@@ -1209,11 +1208,10 @@ async def fetch_all(query: str, params: tuple[Any, ...] = ()) -> list[dict[str, 
     await init_db()
     if settings.using_postgres:
         assert _pg_pool is not None
-        async with _pg_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(_sql(query), params)
-                rows = await cur.fetchall()
-                return [dict(row) for row in rows]
+        async with _pg_pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(_sql(query), params)
+            rows = await cur.fetchall()
+            return [dict(row) for row in rows]
 
     assert _sqlite is not None
     cursor = await _sqlite.execute(query, params)
@@ -1223,6 +1221,7 @@ async def fetch_all(query: str, params: tuple[Any, ...] = ()) -> list[dict[str, 
 
 
 from contextlib import asynccontextmanager
+
 
 @asynccontextmanager
 async def transaction():
@@ -1234,10 +1233,9 @@ async def transaction():
     await init_db()
     if settings.using_postgres:
         assert _pg_pool is not None
-        async with _pg_pool.connection() as conn:
-            async with conn.transaction():
-                async with conn.cursor() as cur:
-                    yield cur
+        async with _pg_pool.connection() as conn, conn.transaction():
+            async with conn.cursor() as cur:
+                yield cur
         return
 
     assert _sqlite is not None
@@ -1255,9 +1253,8 @@ async def execute(query: str, params: tuple[Any, ...] = ()) -> None:
     await init_db()
     if settings.using_postgres:
         assert _pg_pool is not None
-        async with _pg_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(_sql(query), params)
+        async with _pg_pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(_sql(query), params)
         return
 
     assert _sqlite is not None
@@ -1274,9 +1271,8 @@ async def execute_many(query: str, params_list: list[tuple[Any, ...]]) -> None:
 
     if settings.using_postgres:
         assert _pg_pool is not None
-        async with _pg_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.executemany(_sql(query), params_list)
+        async with _pg_pool.connection() as conn, conn.cursor() as cur:
+            await cur.executemany(_sql(query), params_list)
         return
 
     assert _sqlite is not None
@@ -1289,11 +1285,10 @@ async def execute_returning(query: str, params: tuple[Any, ...] = ()) -> dict[st
     await init_db()
     if settings.using_postgres:
         assert _pg_pool is not None
-        async with _pg_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(_sql(query), params)
-                row = await cur.fetchone()
-                return dict(row) if row else None
+        async with _pg_pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute(_sql(query), params)
+            row = await cur.fetchone()
+            return dict(row) if row else None
 
     assert _sqlite is not None
     async with _get_sqlite_tx_lock():
@@ -1308,10 +1303,9 @@ async def execute_script(statements: list[str]) -> None:
     await init_db()
     if settings.using_postgres:
         assert _pg_pool is not None
-        async with _pg_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                for statement in statements:
-                    await cur.execute(statement)
+        async with _pg_pool.connection() as conn, conn.cursor() as cur:
+            for statement in statements:
+                await cur.execute(statement)
         return
 
     assert _sqlite is not None

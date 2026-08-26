@@ -7,7 +7,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from backend.routers.deps import RequestContext, get_request_context, require_provider_api_key
+from backend.routers.deps import (
+    RequestContext,
+    get_request_context,
+    require_provider_api_key,
+)
 
 logger = logging.getLogger("ragapp.models")
 router = APIRouter()
@@ -33,6 +37,7 @@ async def _fetch_openai_models(api_key: str) -> tuple[list[str], list[str]]:
     """
     try:
         import httpx
+
         from backend.utils.network import get_ssrf_event_hooks
 
         async with httpx.AsyncClient(event_hooks=get_ssrf_event_hooks()) as client:
@@ -73,6 +78,7 @@ async def _fetch_gemini_models(api_key: str) -> tuple[list[str], list[str]]:
     """
     try:
         import httpx
+
         from backend.utils.network import get_ssrf_event_hooks
 
         async with httpx.AsyncClient(event_hooks=get_ssrf_event_hooks()) as client:

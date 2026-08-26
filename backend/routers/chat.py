@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
-import asyncio
 from typing import Any
 
 try:
@@ -18,11 +18,22 @@ from fastapi.responses import StreamingResponse
 from openai import APIError
 from pydantic import TypeAdapter
 
-from backend.database import execute, execute_many, fetch_all, fetch_one, transaction, sql_format
+from backend.database import (
+    execute,
+    execute_many,
+    fetch_all,
+    fetch_one,
+    sql_format,
+    transaction,
+)
 from backend.errors import api_error_response
 from backend.metrics import metrics
 from backend.models import ChatRequest, Citation, RerunMessageRequest
-from backend.routers.deps import RequestContext, get_request_context, require_provider_api_key
+from backend.routers.deps import (
+    RequestContext,
+    get_request_context,
+    require_provider_api_key,
+)
 from backend.services import memory as memory_service
 from backend.services import tracing
 from backend.services.agent import run_agent

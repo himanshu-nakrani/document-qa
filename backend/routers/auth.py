@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import httpx
 import logging
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from backend.auth import (
@@ -158,9 +159,9 @@ async def google_oauth_callback(request: Request, response: Response):
 
     # Fix #4: Verify the id_token signature, issuer, audience, and expiry
     # instead of blindly trusting the base64-decoded payload.
-    import time
     import base64
     import json as _json
+    import time
 
     parts = id_token.split(".")
     if len(parts) < 2:

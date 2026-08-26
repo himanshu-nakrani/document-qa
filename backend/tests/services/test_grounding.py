@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
+from backend.models import Citation
 from backend.services.grounding import (
-    _split_sentences,
-    _parse_response,
     _build_prompt,
+    _parse_response,
+    _split_sentences,
     verify_groundedness,
 )
-from backend.models import Citation
 
 
 def test_split_sentences():

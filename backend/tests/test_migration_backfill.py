@@ -34,8 +34,9 @@ async def test_default_workspace_created_for_owner():
 @pytest.mark.asyncio
 async def test_backfill_documents_to_default_workspace():
     """Verify that existing documents without workspace_id are backfilled."""
-    from backend.services.workspace_service import ensure_default_workspace
     import uuid
+
+    from backend.services.workspace_service import ensure_default_workspace
 
     owner_scope = "test:backfill-docs-test"
     
@@ -92,8 +93,9 @@ async def test_backfill_documents_to_default_workspace():
 @pytest.mark.asyncio
 async def test_backfill_conversations_to_default_workspace():
     """Verify that existing conversations without workspace_id are backfilled."""
-    from backend.services.workspace_service import ensure_default_workspace
     import uuid
+
+    from backend.services.workspace_service import ensure_default_workspace
 
     owner_scope = "test:backfill-conv-test"
     

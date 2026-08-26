@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import io
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator
+from typing import Any
 
 from backend.connectors.base import (
     BaseConnector,
@@ -188,6 +189,7 @@ class GoogleDriveConnector(BaseConnector):
     async def download_document(self, remote_doc: RemoteDocument) -> bytes:
         """Download or export document content."""
         import asyncio
+
         from googleapiclient.http import MediaIoBaseDownload
 
         service = self._get_service()

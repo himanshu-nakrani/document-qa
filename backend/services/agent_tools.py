@@ -30,10 +30,10 @@ Deferred intentionally:
 
 from __future__ import annotations
 
-import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from backend.database import fetch_all
 from backend.services.embeddings import embed_query

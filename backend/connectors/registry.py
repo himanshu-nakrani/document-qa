@@ -8,21 +8,21 @@ if TYPE_CHECKING:
     from backend.connectors.base import BaseConnector, ConnectorConfig
 
 # Registry of connector classes by source type
-_CONNECTOR_CLASSES: dict[str, type["BaseConnector"]] = {}
+_CONNECTOR_CLASSES: dict[str, type[BaseConnector]] = {}
 
 
-def register_connector(source_type: str, cls: type["BaseConnector"]) -> type["BaseConnector"]:
+def register_connector(source_type: str, cls: type[BaseConnector]) -> type[BaseConnector]:
     """Decorator to register a connector class."""
     _CONNECTOR_CLASSES[source_type] = cls
     return cls
 
 
-def get_connector_class(source_type: str) -> type["BaseConnector"] | None:
+def get_connector_class(source_type: str) -> type[BaseConnector] | None:
     """Get connector class by source type."""
     return _CONNECTOR_CLASSES.get(source_type)
 
 
-def get_connector(config: "ConnectorConfig") -> "BaseConnector":
+def get_connector(config: ConnectorConfig) -> BaseConnector:
     """Instantiate a connector from config."""
     cls = get_connector_class(config.source_type)
     if cls is None:
@@ -34,11 +34,11 @@ class ConnectorRegistry:
     """Registry for connector instances (per-workspace)."""
 
     def __init__(self):
-        self._connectors: dict[str, "BaseConnector"] = {}
+        self._connectors: dict[str, BaseConnector] = {}
 
     async def load_for_workspace(
         self, workspace_id: str, db_session: Any
-    ) -> list["BaseConnector"]:
+    ) -> list[BaseConnector]:
         """Load all enabled connectors for a workspace from DB."""
         # Import here to avoid circular imports
         from backend.database import get_workspace_connectors
@@ -56,11 +56,11 @@ class ConnectorRegistry:
                     print(f"Failed to load connector {cfg.id}: {e}")
         return connectors
 
-    def get(self, connector_id: str) -> "BaseConnector" | None:
+    def get(self, connector_id: str) -> BaseConnector | None:
         """Get loaded connector by ID."""
         return self._connectors.get(connector_id)
 
-    def all(self) -> list["BaseConnector"]:
+    def all(self) -> list[BaseConnector]:
         """Get all loaded connectors."""
         return list(self._connectors.values())
 

@@ -433,13 +433,13 @@ def test_ragas_metrics_on_golden_set(client):
         pytest.skip("SKIP_EVAL=1 set")
 
     try:
+        from datasets import Dataset  # type: ignore
         from ragas import evaluate  # type: ignore
         from ragas.metrics import (  # type: ignore
             answer_relevancy,
             context_precision,
             faithfulness,
         )
-        from datasets import Dataset  # type: ignore
     except ImportError:
         pytest.skip(
             "ragas and/or datasets not installed — "

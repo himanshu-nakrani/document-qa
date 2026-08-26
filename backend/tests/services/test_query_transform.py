@@ -5,12 +5,12 @@ from __future__ import annotations
 import pytest
 
 from backend.services.query_transform import (
+    TransformedQuery,
     _parse_list,
-    multi_query,
     hyde,
+    multi_query,
     step_back,
     transform,
-    TransformedQuery,
 )
 
 

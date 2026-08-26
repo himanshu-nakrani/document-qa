@@ -1,7 +1,9 @@
 import asyncio
 import ipaddress
 import socket
+
 import httpx
+
 
 async def prevent_ssrf_hook(request: httpx.Request) -> None:
     """Event hook to prevent SSRF by blocking access to restricted IP addresses."""

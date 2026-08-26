@@ -26,7 +26,6 @@ from typing import Any
 from backend.database import fetch_all
 from backend.services.vectorstore import RetrievedChunk
 
-
 # Stop-words deliberately small: workspace artifacts are short, so dropping
 # common terms preserves more signal than aggressive list pruning.
 _STOPWORDS = frozenset(

@@ -12,7 +12,10 @@ from backend.routers.deps import RequestContext, get_request_context
 from backend.services import workspace_service
 from backend.services.extract import FileValidationError, validate_upload
 from backend.services.jobs import enqueue_ingest_job
-from backend.services.provider_auth import normalize_provider_api_key, provider_requires_api_key
+from backend.services.provider_auth import (
+    normalize_provider_api_key,
+    provider_requires_api_key,
+)
 from backend.settings import settings
 
 router = APIRouter()

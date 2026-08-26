@@ -1,13 +1,14 @@
+import sys
 import unittest
 from unittest.mock import MagicMock
-import sys
 
 # Mock dependencies before importing the code under test
 sys.modules['openai'] = MagicMock()
 sys.modules['google'] = MagicMock()
 sys.modules['google.generativeai'] = MagicMock()
 
-from backend.services.llm import build_rag_prompt, SYSTEM_PROMPT
+from backend.services.llm import SYSTEM_PROMPT, build_rag_prompt
+
 
 class TestLLM(unittest.TestCase):
     def test_build_rag_prompt_basic(self):

@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 
 from pydantic import TypeAdapter
+
 from backend.database import execute, execute_many, fetch_all
 from backend.services.chunking import ChunkPayload
 from backend.settings import settings

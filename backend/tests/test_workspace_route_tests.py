@@ -7,8 +7,9 @@ from httpx import AsyncClient
 @pytest.mark.asyncio
 async def test_chat_requires_workspace_id_when_provided(client: AsyncClient):
     """Verify that chat requests with workspace_id are properly scoped."""
-    from backend.database import execute, fetch_one
     import uuid
+
+    from backend.database import execute, fetch_one
 
     # Create a test workspace
     owner_scope = "test:chat-workspace-id-test"
@@ -60,8 +61,9 @@ async def test_chat_requires_workspace_id_when_provided(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_workspace_sources_scoped_to_workspace(client: AsyncClient):
     """Verify that workspace_sources are properly scoped to their workspace."""
-    from backend.database import execute, fetch_all
     import uuid
+
+    from backend.database import execute, fetch_all
 
     # Create two workspaces
     owner_scope = "test:workspace-sources-scope-test"
@@ -121,8 +123,9 @@ async def test_workspace_sources_scoped_to_workspace(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_workspace_artifacts_scoped_to_workspace(client: AsyncClient):
     """Verify that workspace_artifacts are properly scoped to their workspace."""
-    from backend.database import execute, fetch_all
     import uuid
+
+    from backend.database import execute, fetch_all
 
     # Create two workspaces
     owner_scope = "test:workspace-artifacts-scope-test"

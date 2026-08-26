@@ -31,8 +31,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from backend.database import execute, fetch_one
 from backend.services.llm import create_openai_text, gemini_text
@@ -191,7 +191,7 @@ async def build_context(
         # Nothing to summarize yet; just surface the stored summary if any.
         try:
             summary, _ = await load_summary(conversation_id, owner_id)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("memory_load_failed conversation_id=%s", conversation_id)
             summary = None
         stages["memory_state"] = "cold" if summary is None else "warm"
@@ -202,7 +202,7 @@ async def build_context(
 
     try:
         prior_summary, prior_turn_count = await load_summary(conversation_id, owner_id)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("memory_load_failed conversation_id=%s", conversation_id)
         prior_summary, prior_turn_count = None, 0
 
@@ -248,7 +248,7 @@ async def build_context(
             summary=new_summary,
             turn_count=current_turns,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("memory_upsert_failed conversation_id=%s", conversation_id)
         # Still honor the new summary for this turn even if we can't persist.
     stages["memory_state"] = "refreshed"

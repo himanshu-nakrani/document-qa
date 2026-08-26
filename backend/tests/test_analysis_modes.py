@@ -54,8 +54,9 @@ async def test_chat_mode_brief_instructions(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_chat_request_mode_validation(client: AsyncClient):
     """Verify that chat request accepts valid mode values."""
-    from backend.models import ChatRequest
     from pydantic import ValidationError
+
+    from backend.models import ChatRequest
 
     # Valid modes should pass
     for mode in ["ask", "compare", "extract", "brief", None]:

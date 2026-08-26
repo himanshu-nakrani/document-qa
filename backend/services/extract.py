@@ -198,8 +198,8 @@ def _ocr_pdf_pages(raw: bytes) -> list[ExtractedSection] | None:
     the caller raise the usual "scanned image-only" error.
     """
     try:
-        from pdf2image import convert_from_bytes  # type: ignore
         import pytesseract  # type: ignore
+        from pdf2image import convert_from_bytes  # type: ignore
     except ImportError:
         logger.debug("ocr_deps_missing: install pytesseract + pdf2image for OCR support")
         return None

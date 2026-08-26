@@ -51,11 +51,11 @@ from typing import Any
 
 from backend.services import tracing
 from backend.services.agent_tools import (
+    TOOL_DEFINITIONS,
     AgentToolContext,
     ToolArgumentError,
     execute_tool,
     tool_name_list,
-    TOOL_DEFINITIONS,
 )
 from backend.services.llm import create_openai_text, gemini_text
 from backend.services.vectorstore import RetrievedChunk
@@ -214,7 +214,7 @@ async def _fallback_search(
                 args={"query": question},
                 ctx=ctx,
             )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("agent_fallback_search_failed")
 
 
@@ -365,7 +365,7 @@ async def run_agent(
                     stopped_reason = "tool_budget_exhausted"
                     break
                 continue
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.exception("agent_tool_unexpected_error tool=%s", tool_name)
                 ctx.trace.append(
                     {

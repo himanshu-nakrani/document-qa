@@ -19,7 +19,8 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.services import graph_retrieval, hybrid, mmr as mmr_mod, reranker, tracing
+from backend.services import graph_retrieval, hybrid, reranker, tracing
+from backend.services import mmr as mmr_mod
 from backend.services.vectorstore import (
     RetrievedChunk,
     query_similar,
