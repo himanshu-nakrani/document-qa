@@ -89,6 +89,29 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
         return response
 
+# JSON API responses should not execute anything in a browser. FastAPI's
+# Swagger/ReDoc pages load scripts and styles from jsDelivr, so they need a
+# narrower exception that still forbids framing.
+_API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+_DOCS_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+    "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "font-src 'self' https://cdn.jsdelivr.net data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'none'"
+)
+_DOCS_PATHS = {"/docs", "/redoc", "/docs/oauth2-redirect"}
+
+
+def _content_security_policy(path: str) -> str:
+    if path in _DOCS_PATHS or path.startswith("/docs/"):
+        return _DOCS_CSP
+    return _API_CSP
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
@@ -97,4 +120,5 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if request.url.scheme == "https":
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+        response.headers.setdefault("Content-Security-Policy", _content_security_policy(request.url.path))
         return response
